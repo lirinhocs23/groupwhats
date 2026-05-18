@@ -45,7 +45,8 @@ function inicializarSessao(usuarioId, socket = null) {
   
   const client = new Client({
     authStrategy: new LocalAuth({
-      clientId: usuarioId
+      clientId: usuarioId,
+      dataPath: process.env.WWEBJS_AUTH_PATH || undefined
     }),
     puppeteer: {
       headless: true,
