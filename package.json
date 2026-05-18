@@ -1,0 +1,25 @@
+{
+  "name": "bot-whatsapp-inativos",
+  "version": "1.0.0",
+  "description": "Bot WhatsApp - Verificador de membros inativos em grupos",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "inativos"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.20",
+    "express": "^4.19.2",
+    "fs-extra": "^11.3.5",
+    "qrcode-terminal": "^0.12.0",
+    "socket.io": "^4.7.5",
+    "whatsapp-web.js": "^1.34.7"
+  }
+}

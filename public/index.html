@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel Web — WhatsApp Group SaaS</title>
+  
+  <!-- Fontes Premium do Google -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Ícones FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- CSS Personalizado -->
+  <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+
+  <!-- ─── TELA DE LOGIN ─── -->
+  <div id="login-container" class="login-wrapper">
+    <div class="login-glass-card">
+      <div class="login-header">
+        <div class="logo-icon"><i class="fa-brands fa-whatsapp"></i></div>
+        <h2>WhatsApp Group SaaS</h2>
+        <p>Gerenciamento inteligente de grupos e moderação</p>
+      </div>
+      <form id="login-form">
+        <div class="form-group">
+          <label for="username">Usuário</label>
+          <div class="input-wrapper">
+            <i class="fa-regular fa-user"></i>
+            <input type="text" id="username" placeholder="Digite seu usuário..." required value="admin">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="password">Senha</label>
+          <div class="input-wrapper">
+            <i class="fa-regular fa-hand-paper"></i>
+            <input type="password" id="password" placeholder="Digite sua senha..." required value="admin">
+          </div>
+        </div>
+        <div id="login-error" class="error-alert hidden">
+          <i class="fa-solid fa-circle-exclamation"></i> <span id="error-text">Credenciais incorretas.</span>
+        </div>
+        <button type="submit" class="btn-primary">
+          <span>Acessar Painel</span> <i class="fa-solid fa-arrow-right"></i>
+        </button>
+        <div class="login-footer">
+          <span>Novo por aqui? </span><a href="#" id="link-show-register">Criar uma conta</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ─── TELA DE CADASTRO ─── -->
+  <div id="register-container" class="login-wrapper hidden">
+    <div class="login-glass-card">
+      <div class="login-header">
+        <div class="logo-icon"><i class="fa-brands fa-whatsapp"></i></div>
+        <h2>Criar Nova Conta</h2>
+        <p>Cadastre-se para começar a gerenciar seus grupos</p>
+      </div>
+      <form id="register-form">
+        <div class="form-group">
+          <label for="register-name">Nome Completo</label>
+          <div class="input-wrapper">
+            <i class="fa-regular fa-id-badge"></i>
+            <input type="text" id="register-name" placeholder="Digite seu nome completo..." required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="register-username">Usuário (Username)</label>
+          <div class="input-wrapper">
+            <i class="fa-regular fa-user"></i>
+            <input type="text" id="register-username" placeholder="Escolha um usuário..." required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="register-password">Senha</label>
+          <div class="input-wrapper">
+            <i class="fa-regular fa-hand-paper"></i>
+            <input type="password" id="register-password" placeholder="Crie uma senha de acesso..." required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="register-confirm-password">Confirmar Senha</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-circle-check"></i>
+            <input type="password" id="register-confirm-password" placeholder="Confirme sua senha..." required>
+          </div>
+        </div>
+        <div id="register-error" class="error-alert hidden">
+          <i class="fa-solid fa-circle-exclamation"></i> <span id="register-error-text">Ocorreu um erro ao cadastrar.</span>
+        </div>
+        <div id="register-success" class="success-alert hidden">
+          <i class="fa-solid fa-circle-check"></i> Conta criada com sucesso! Redirecionando...
+        </div>
+        <button type="submit" class="btn-primary">
+          <span>Finalizar Cadastro</span> <i class="fa-solid fa-user-plus"></i>
+        </button>
+        <div class="login-footer">
+          <span>Já tem uma conta? </span><a href="#" id="link-show-login">Voltar para o Login</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ─── TELA PRINCIPAL (DASHBOARD) ─── -->
+  <div id="dashboard-container" class="dashboard-wrapper hidden">
+    
+    <!-- Mobile Header -->
+    <div class="mobile-header">
+      <div class="mobile-brand">
+        <i class="fa-brands fa-whatsapp brand-icon"></i>
+        <span>WA SaaS</span>
+      </div>
+      <button id="btn-toggle-sidebar" class="btn-toggle-sidebar">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+    </div>
+    
+    <!-- Sidebar Lateral -->
+    <aside class="sidebar" id="sidebar-menu">
+      <div class="sidebar-brand">
+        <i class="fa-brands fa-whatsapp brand-icon"></i>
+        <div class="brand-text">
+          <h3>WA SaaS</h3>
+          <span>Moderação Elite</span>
+        </div>
+      </div>
+
+      <!-- Status de Conexão Geral -->
+      <div class="sidebar-status-card">
+        <span class="status-label">Status do Bot</span>
+        <div class="status-badge disconnected" id="sidebar-status-badge">
+          <span class="indicator"></span>
+          <span class="text">Desconectado</span>
+        </div>
+      </div>
+
+      <!-- Menu Lateral (Grupos Ativos) -->
+      <nav class="sidebar-nav">
+        <span class="nav-title">Nossos Grupos</span>
+        <ul id="grupos-lista" class="grupos-lista-ul">
+          <!-- Carregado Dinamicamente -->
+          <li class="grupo-item-placeholder">Nenhum grupo ativo monitorado</li>
+        </ul>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-profile">
+          <div class="user-avatar"><i class="fa-solid fa-user-tie"></i></div>
+          <div class="user-info">
+            <h4 id="user-name-display">Usuário</h4>
+            <span>Administrador</span>
+          </div>
+        </div>
+        <div class="sidebar-footer-actions">
+          <button id="btn-settings" class="btn-settings-icon" title="Alterar Senha">
+            <i class="fa-solid fa-gear"></i>
+          </button>
+          <button id="btn-logout" class="btn-logout-icon" title="Sair do Painel">
+            <i class="fa-solid fa-power-off"></i>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Área de Conteúdo Principal -->
+    <main class="main-content">
+      
+      <!-- Cabeçalho Superior -->
+      <header class="main-header">
+        <div class="welcome-section">
+          <h1 id="welcome-message">Olá, Admin! 👋</h1>
+          <p>Acompanhe em tempo real o engajamento e a inatividade dos seus grupos.</p>
+        </div>
+        <div class="header-actions">
+          <button id="btn-sync" class="btn-secondary" title="Sincronizar dados">
+            <i class="fa-solid fa-rotate"></i> <span>Sincronizar</span>
+          </button>
+          <button id="btn-disconnect-wa" class="btn-danger hidden">
+            <i class="fa-solid fa-unlink"></i> Desconectar WhatsApp
+          </button>
+        </div>
+      </header>
+
+      <!-- Painel de Conexão WhatsApp (QR Code) -->
+      <section id="wa-connection-panel" class="connection-section">
+        <div class="glass-card connection-card">
+          <div class="connection-info">
+            <div class="info-text">
+              <h2><i class="fa-solid fa-qrcode"></i> Vincular seu WhatsApp</h2>
+              <p>Conecte o seu número de WhatsApp à nossa inteligência. Escaneie o QR Code ao lado para ativar o monitoramento em tempo real dos seus grupos.</p>
+            </div>
+            <div class="status-steps">
+              <div class="step-item"><span class="step-num">1</span> Abra o WhatsApp no seu celular</div>
+              <div class="step-item"><span class="step-num">2</span> Toque em Dispositivos Conectados</div>
+              <div class="step-item"><span class="step-num">3</span> Aponte sua câmera para esta tela</div>
+            </div>
+            <button id="btn-connect-wa" class="btn-primary">
+              <i class="fa-brands fa-whatsapp"></i> Gerar QR Code
+            </button>
+          </div>
+          <div class="qr-code-area">
+            <div class="qr-box" id="qr-box">
+              <div class="qr-placeholder" id="qr-placeholder">
+                <i class="fa-solid fa-qrcode"></i>
+                <span>Aguardando Geração</span>
+              </div>
+              <div id="qrcode" class="qrcode-canvas hidden"></div>
+            </div>
+            <div class="qr-status" id="qr-status-text">WhatsApp Desconectado</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CONTEÚDO PRINCIPAL (DADOS DO GRUPO) -->
+      <div id="group-details-section" class="group-details-wrapper hidden">
+        <div class="group-title-header">
+          <h2 id="current-group-name"><i class="fa-solid fa-users-viewfinder"></i> Grupo: Fd</h2>
+          <div class="group-filter-actions">
+            <label for="filter-dias">Inativo há:</label>
+            <select id="filter-dias">
+              <option value="7">7 dias</option>
+              <option value="15">15 dias</option>
+              <option value="30" selected>30 dias</option>
+              <option value="60">60 dias</option>
+            </select>
+
+            <label for="filter-limite">Limite mensagens:</label>
+            <select id="filter-limite">
+              <option value="1">1 msg</option>
+              <option value="3" selected>3 msgs</option>
+              <option value="5">5 msgs</option>
+              <option value="10">10 msgs</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Grid de Cards de Estatísticas Rápidas -->
+        <div class="stats-grid">
+          <div class="glass-card stat-card border-blue">
+            <div class="stat-icon bg-blue"><i class="fa-solid fa-users"></i></div>
+            <div class="stat-data">
+              <h3 id="stat-total-membros">0</h3>
+              <span>Total Analisado</span>
+            </div>
+          </div>
+          <div class="glass-card stat-card border-green">
+            <div class="stat-icon bg-green"><i class="fa-solid fa-fire"></i></div>
+            <div class="stat-data">
+              <h3 id="stat-ativos">0</h3>
+              <span>Membros Ativos</span>
+            </div>
+          </div>
+          <div class="glass-card stat-card border-yellow">
+            <div class="stat-icon bg-yellow"><i class="fa-solid fa-comment-slash"></i></div>
+            <div class="stat-data">
+              <h3 id="stat-silenciosos">0</h3>
+              <span>Observadores (Silenciosos)</span>
+            </div>
+          </div>
+          <div class="glass-card stat-card border-red">
+            <div class="stat-icon bg-red"><i class="fa-solid fa-ghost"></i></div>
+            <div class="stat-data">
+              <h3 id="stat-fantasmas">0</h3>
+              <span>Fantasmas / Inativos</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Grid de Gráficos -->
+        <div class="charts-grid">
+          <div class="glass-card chart-card">
+            <h3>Divisão de Engajamento</h3>
+            <div id="chart-pie"></div>
+          </div>
+          <div class="glass-card chart-card">
+            <h3>Top 10 Membros Mais Ativos (Ranking)</h3>
+            <div id="chart-bar"></div>
+          </div>
+        </div>
+
+        <!-- Tabela Completa de Membros -->
+        <div class="glass-card table-card">
+          <div class="table-header">
+            <h3>Lista Detalhada de Participantes</h3>
+            <div class="table-search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="membro-search" placeholder="Buscar por número ou nome...">
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="membros-table" id="membros-table">
+              <thead>
+                <tr>
+                  <th>Contato</th>
+                  <th>Nome WhatsApp</th>
+                  <th>Mensagens</th>
+                  <th>Última Interação</th>
+                  <th>Dias Sem Falar</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="membros-table-body">
+                <tr>
+                  <td colspan="7" class="loading-td">Carregando dados dos membros...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TELA INICIAL (QUANDO NÃO HÁ GRUPO SELECIONADO) -->
+      <section id="empty-state-section" class="empty-state">
+        <div class="empty-state-content">
+          <i class="fa-solid fa-arrow-left-long animation-float-left"></i>
+          <i class="fa-solid fa-users empty-icon"></i>
+          <h2>Nenhum grupo selecionado</h2>
+          <p>Conecte o seu WhatsApp e selecione um grupo na barra lateral esquerda para acompanhar a atividade dos membros e realizar moderação.</p>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ─── MODAL ALTERAR SENHA ─── -->
+  <div id="settings-modal" class="modal-wrapper hidden">
+    <div class="modal-glass-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-key"></i> Alterar Senha</h3>
+        <button id="btn-close-modal" class="btn-close-modal"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="change-password-form">
+        <div class="form-group">
+          <label for="current-password">Senha Atual</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-lock"></i>
+            <input type="password" id="current-password" placeholder="Digite a senha atual..." required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="new-password">Nova Senha</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-key"></i>
+            <input type="password" id="new-password" placeholder="Digite a nova senha..." required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="confirm-new-password">Confirmar Nova Senha</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-circle-check"></i>
+            <input type="password" id="confirm-new-password" placeholder="Confirme a nova senha..." required>
+          </div>
+        </div>
+        <div id="password-alert" class="error-alert hidden"></div>
+        <button type="submit" class="btn-primary">
+          <span>Salvar Nova Senha</span> <i class="fa-solid fa-save"></i>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- CDN Socket.io Client -->
+  <script src="/socket.io/socket.io.js"></script>
+  
+  <!-- CDN biblioteca geradora de QR Code no Navegador -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  
+  <!-- CDN Biblioteca de Gráficos Ultra-Modernos (ApexCharts) -->
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+  <!-- Lógica Customizada JavaScript -->
+  <script src="js/dashboard.js"></script>
+</body>
+</html>
