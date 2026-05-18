@@ -27,6 +27,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Estrutura: { [usuarioId]: { client: Client, status: string, qr: string, numero: string } }
 const sessoesAtivas = {};
 
+// Controle Anti-Spam e Concorrência para evitar mensagens duplicadas
+const mensagensProcessadas = new Set();
+const ultimosAvisosEnviados = {}; // { [participanteId]: timestamp }
+const usuariosSendoRemovidos = new Set();
+
 /**
  * Inicializa a sessão do WhatsApp para um usuário específico.
  */
@@ -241,6 +246,19 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
  */
 async function processarMensagemEntrada(usuarioId, client, msg) {
   try {
+    // Evita processamento duplicado para a mesma mensagem (devido a múltiplos eventos message/message_create)
+    if (msg.id && msg.id.id) {
+      if (mensagensProcessadas.has(msg.id.id)) {
+        return;
+      }
+      mensagensProcessadas.add(msg.id.id);
+      
+      // Limpa periodicamente o Set para não estourar a memória
+      if (mensagensProcessadas.size > 2000) {
+        mensagensProcessadas.clear();
+      }
+    }
+
     // Processa apenas mensagens vindas de grupos
     if (msg.from.endsWith('@g.us')) {
       const chat = await msg.getChat();
@@ -666,12 +684,30 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
                 console.error('❌ Erro ao apagar mensagem no SaaS:', err.message);
               }
 
+              // Evita concorrência e spam do próprio bot: se o usuário já está no processo de banimento, ignora outras mensagens dele
+              if (usuariosSendoRemovidos.has(participanteId)) {
+                return;
+              }
+
+              // Debounce de Avisos e Advertências (Máximo 1 aviso/advertência a cada 3 segundos por usuário)
+              const agoraTime = Date.now();
+              const ultimoAviso = ultimosAvisosEnviados[participanteId] || 0;
+              if (agoraTime - ultimoAviso < 3000) {
+                console.log(`⏳ [SaaS Moderador] Evitando aviso/advertência duplicada em lote para ${participanteId}.`);
+                return; // Apenas apaga a mídia silenciosamente sem gerar flood de mensagens do bot
+              }
+              ultimosAvisosEnviados[participanteId] = agoraTime;
+
               // 2. Registra advertência de forma persistente
               const advCount = await database.registrarAdvertencia(usuarioId, groupId, participanteId);
               const contato = await msg.getContact();
 
               // 3. Executa a punição correspondente
               if (advCount >= 3) {
+                usuariosSendoRemovidos.add(participanteId);
+                // Remove do Set de remoção após 5 segundos para limpar cache
+                setTimeout(() => usuariosSendoRemovidos.delete(participanteId), 5000);
+
                 try {
                   await chat.removeParticipants([participanteId]);
                   console.log(`🚫 [SaaS] Spammer ${participanteId} removido por excesso de infrações.`);
