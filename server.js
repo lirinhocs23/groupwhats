@@ -193,6 +193,50 @@ async function encerrarSessao(usuarioId, forcarLogoff = false) {
 }
 
 /**
+ * Analisa uma imagem em base64 usando a API do Gemini 1.5 Flash para detectar tragédias, acidentes ou violência.
+ */
+async function analisarImagemComIA(base64Data, mimeType, apiKey) {
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const payload = {
+      contents: [
+        {
+          parts: [
+            {
+              text: "Analise esta imagem enviada em um grupo de chat. Ela contém cenas de acidentes de trânsito, capotamento, carros destruídos, tragédias, violência física, sangue, mutilação ou conteúdo chocante/sensacionalista/gore? Responda apenas com a palavra SIM ou NAO."
+            },
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: base64Data
+              }
+            }
+          ]
+        }
+      ]
+    };
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      console.warn(`⚠️ API Gemini respondeu com status de erro: ${res.status}`);
+      return 'NAO';
+    }
+    
+    const data = await res.json();
+    const textoResposta = data.candidates?.[0]?.content?.parts?.[0]?.text?.toUpperCase() || 'NAO';
+    return textoResposta.includes('SIM') ? 'SIM' : 'NAO';
+  } catch (err) {
+    console.error('⚠️ Erro na análise de visão do Gemini:', err.message);
+    return 'NAO';
+  }
+}
+
+/**
  * Processamento interno para salvar logs de mensagens recebidas/criadas
  */
 async function processarMensagemEntrada(usuarioId, client, msg) {
@@ -563,51 +607,88 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
               'rifa', 'rifas', 'rifeiro', 'rifeiros', 'bilhete', 'bilhetes', 'sorteio', 
               'sorteios', 'cota', 'cotas', 'ação entre amigos', 'acao entre amigos', 
               'rifa online', 'adquira seu bilhete', 'adquira sua cota', 'compra de cota', 
-              'comprar cota', 'tabela de rifa', 'tabela de rifas', 'adquira já', 'adquira ja'
+              'comprar cota', 'tabela de rifa', 'tabela de rifas', 'adquira já', 'adquira ja',
+              // Termos de Tragédia / Acidentes
+              'acidente', 'acidentes', 'colisão', 'colisao', 'capotou', 'capotamento', 'baleado', 
+              'baleados', 'assassinato', 'homicídio', 'homicidio', 'óbito', 'obito', 'vítima', 
+              'vitima', 'vítimas', 'vitimas', 'morreu', 'faleceu', 'corpo', 'necrotério', 
+              'tragédia', 'tragedia', 'grave acidente', 'morador de', 'mecânico', 'mecanico'
             ];
 
             let contemSpam = false;
+            let motivoSpam = 'anúncio ou conteúdo proibido';
+
+            // 1. Verifica termos proibidos no texto/legenda
             for (const termo of termosProibidos) {
               if (corpoMinusculo.includes(termo)) {
                 contemSpam = true;
+                motivoSpam = `uso de termo proibido ("${termo}")`;
                 break;
               }
             }
 
-          if (contemSpam) {
-            console.log(`🚨 [SaaS] SPAM DETECTADO de ${participanteId} no grupo "${nomeGrupo}": "${corpo.substring(0, 100)}"`);
-
-            // 1. Apaga a mensagem na hora!
-            try {
-              await msg.delete(true);
-              console.log(`🗑️ Mensagem de spam apagada no SaaS.`);
-            } catch (err) {
-              console.error('❌ Erro ao apagar mensagem de spam no SaaS:', err.message);
-            }
-
-            // 2. Registra advertência de forma persistente
-            const advCount = await database.registrarAdvertencia(usuarioId, groupId, participanteId);
-            const contato = await msg.getContact();
-
-            // 3. Executa a punição correspondente
-            if (advCount >= 3) {
-              try {
-                await chat.removeParticipants([participanteId]);
-                console.log(`🚫 [SaaS] Spammer ${participanteId} removido por excesso de spam.`);
-                await chat.sendMessage(`🚫 @${contato.id.user} foi removido do grupo por atingir o limite de 3 advertências de anúncios proibidos.`, { mentions: [contato] });
-                
-                // Reseta as advertências dele
-                await database.zerarAdvertencias(usuarioId, groupId, participanteId);
-              } catch (err) {
-                console.error('❌ Erro ao remover usuário no SaaS:', err.message);
-                await chat.sendMessage(`⚠️ @${contato.id.user} deveria ser banido por atingir 3 advertências, mas o bot não possui privilégios de Admin no grupo para removê-lo!`, { mentions: [contato] });
+            // 2. Heurística Inteligente para Mídias Encaminhadas (Zero-Custo / Sem Latência)
+            // Se for imagem/vídeo/mídia e estiver marcado como encaminhado
+            if (!contemSpam && msg.hasMedia && msg.isForwarded) {
+              const score = msg.forwardingScore || 0;
+              // Se for encaminhado com frequência (score >= 2) ou se for mídia encaminhada sem nenhuma legenda relevante
+              if (score >= 2 || !corpo.trim()) {
+                contemSpam = true;
+                motivoSpam = 'mídia compartilhada em massa / encaminhada';
               }
-            } else {
-              await chat.sendMessage(`⚠️ @${contato.id.user}, anúncios não são permitidos! Advertência (${advCount}/3). A sua mensagem foi apagada.`, { mentions: [contato] });
             }
 
-            return; // Interrompe para não salvar nas estatísticas gerais
-          }
+            // 3. Análise Avançada de Imagem por IA (Opcional - Ativo se houver GEMINI_API_KEY)
+            if (!contemSpam && msg.hasMedia && process.env.GEMINI_API_KEY) {
+              try {
+                const media = await msg.downloadMedia();
+                if (media && media.mimetype.startsWith('image/')) {
+                  console.log(`🤖 [Moderador IA] Analisando imagem de ${participanteId} com Gemini Vision...`);
+                  const resultadoIA = await analisarImagemComIA(media.data, media.mimetype, process.env.GEMINI_API_KEY);
+                  if (resultadoIA === 'SIM') {
+                    contemSpam = true;
+                    motivoSpam = 'conteúdo visual impróprio detectado por Inteligência Artificial (cena de acidente/tragédia)';
+                  }
+                }
+              } catch (err) {
+                console.error('⚠️ Falha ao baixar ou analisar mídia com IA:', err.message);
+              }
+            }
+
+            if (contemSpam) {
+              console.log(`🚨 [SaaS] SPAM/CONTEÚDO PROIBIDO DETECTADO de ${participanteId} no grupo "${nomeGrupo}": "${motivoSpam}"`);
+
+              // 1. Apaga a mensagem na hora!
+              try {
+                await msg.delete(true);
+                console.log(`🗑️ Mensagem proibida apagada no SaaS. Motivo: ${motivoSpam}`);
+              } catch (err) {
+                console.error('❌ Erro ao apagar mensagem no SaaS:', err.message);
+              }
+
+              // 2. Registra advertência de forma persistente
+              const advCount = await database.registrarAdvertencia(usuarioId, groupId, participanteId);
+              const contato = await msg.getContact();
+
+              // 3. Executa a punição correspondente
+              if (advCount >= 3) {
+                try {
+                  await chat.removeParticipants([participanteId]);
+                  console.log(`🚫 [SaaS] Spammer ${participanteId} removido por excesso de infrações.`);
+                  await chat.sendMessage(`🚫 @${contato.id.user} foi removido do grupo por atingir o limite de 3 advertências de conteúdo proibido (anúncios, rifas, spam ou tragédias).`, { mentions: [contato] });
+                  
+                  // Reseta as advertências dele
+                  await database.zerarAdvertencias(usuarioId, groupId, participanteId);
+                } catch (err) {
+                  console.error('❌ Erro ao remover usuário no SaaS:', err.message);
+                  await chat.sendMessage(`⚠️ @${contato.id.user} deveria ser banido por atingir 3 advertências, mas o bot não possui privilégios de Admin no grupo para removê-lo!`, { mentions: [contato] });
+                }
+              } else {
+                await chat.sendMessage(`⚠️ @${contato.id.user}, conteúdos proibidos (anúncios, rifas, spam ou imagens de acidentes/tragédias/encaminhados) não são permitidos! Advertência (${advCount}/3). A sua mensagem foi apagada.`, { mentions: [contato] });
+              }
+
+              return; // Interrompe para não salvar nas estatísticas gerais
+            }
         }
       }
     }
