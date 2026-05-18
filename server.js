@@ -31,6 +31,7 @@ const sessoesAtivas = {};
 const mensagensProcessadas = new Set();
 const ultimosAvisosEnviados = {}; // { [participanteId]: timestamp }
 const usuariosSendoRemovidos = new Set();
+let promessaDelecaoAtiva = Promise.resolve(); // Fila serializada de deleções no Puppeteer
 
 /**
  * Inicializa a sessão do WhatsApp para um usuário específico.
@@ -239,6 +240,24 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
     console.error('⚠️ Erro na análise de visão do Gemini:', err.message);
     return 'NAO';
   }
+}
+
+/**
+ * Deleta uma mensagem do WhatsApp de forma serializada (fila) para evitar
+ * colisões de cliques e popups concorrentes no DOM do Puppeteer.
+ */
+async function deletarMensagemComFila(msg) {
+  promessaDelecaoAtiva = promessaDelecaoAtiva.then(async () => {
+    try {
+      await msg.delete(true);
+      console.log(`🗑️ Mensagem proibida apagada no SaaS de forma serializada.`);
+    } catch (err) {
+      console.error('❌ Erro ao apagar mensagem na fila do SaaS:', err.message);
+    }
+    // Aguarda um intervalo estável de 350ms para que os modais e menus do DOM do Puppeteer fechem completamente
+    await new Promise(resolve => setTimeout(resolve, 350));
+  });
+  await promessaDelecaoAtiva;
 }
 
 /**
@@ -685,12 +704,11 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             if (contemSpam) {
               console.log(`🚨 [SaaS] SPAM/CONTEÚDO PROIBIDO DETECTADO de ${participanteId} no grupo "${nomeGrupo}": "${motivoSpam}"`);
 
-              // 1. Apaga a mensagem na hora!
+              // 1. Apaga a mensagem na hora! (Fila serializada para evitar concorrência de cliques no Puppeteer)
               try {
-                await msg.delete(true);
-                console.log(`🗑️ Mensagem proibida apagada no SaaS. Motivo: ${motivoSpam}`);
+                await deletarMensagemComFila(msg);
               } catch (err) {
-                console.error('❌ Erro ao apagar mensagem no SaaS:', err.message);
+                console.error('❌ Falha ao enfileirar deleção de mensagem:', err.message);
               }
 
               // Evita concorrência e spam do próprio bot: se o usuário já está no processo de banimento, ignora outras mensagens dele
