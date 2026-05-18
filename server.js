@@ -594,6 +594,11 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
         }
 
         if (!eAdmin) {
+          // Se for mídia, aguarda 500ms para garantir que todos os metadados (como isForwarded) foram recebidos e preenchidos no objeto pelo whatsapp-web.js
+          if (msg.hasMedia) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+
           const corpoMinusculo = corpo.toLowerCase();
 
           // Exceção Cultural: Como estamos no grupo da estação, liberamos termos e negociações da tradição de espadas
