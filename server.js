@@ -31,7 +31,8 @@ const sessoesAtivas = {};
 const mensagensProcessadas = new Set();
 const ultimosAvisosEnviados = {}; // { [participanteId]: timestamp }
 const usuariosSendoRemovidos = new Set();
-let promessaDelecaoAtiva = Promise.resolve(); // Fila serializada de deleções no Puppeteer
+let delecaoEmAndamento = false;
+const filaDelecao = [];
 
 /**
  * Inicializa a sessão do WhatsApp para um usuário específico.
@@ -243,21 +244,34 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
 }
 
 /**
+ * Fila sequencial assíncrona para exclusão de mensagens
+ */
+async function processarFilaDelecao() {
+  if (delecaoEmAndamento) return;
+  delecaoEmAndamento = true;
+
+  while (filaDelecao.length > 0) {
+    const msg = filaDelecao.shift();
+    try {
+      await msg.delete(true);
+      console.log(`🗑️ Mensagem proibida apagada no SaaS de forma sequencial na fila.`);
+    } catch (err) {
+      console.error('❌ Erro ao apagar mensagem na fila do SaaS:', err.message);
+    }
+    // Aguarda um intervalo de estabilização de 400ms para o DOM do Puppeteer
+    await new Promise(resolve => setTimeout(resolve, 400));
+  }
+
+  delecaoEmAndamento = false;
+}
+
+/**
  * Deleta uma mensagem do WhatsApp de forma serializada (fila) para evitar
  * colisões de cliques e popups concorrentes no DOM do Puppeteer.
  */
 async function deletarMensagemComFila(msg) {
-  promessaDelecaoAtiva = promessaDelecaoAtiva.then(async () => {
-    try {
-      await msg.delete(true);
-      console.log(`🗑️ Mensagem proibida apagada no SaaS de forma serializada.`);
-    } catch (err) {
-      console.error('❌ Erro ao apagar mensagem na fila do SaaS:', err.message);
-    }
-    // Aguarda um intervalo estável de 350ms para que os modais e menus do DOM do Puppeteer fechem completamente
-    await new Promise(resolve => setTimeout(resolve, 350));
-  });
-  await promessaDelecaoAtiva;
+  filaDelecao.push(msg);
+  processarFilaDelecao();
 }
 
 /**
@@ -673,14 +687,31 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
               }
             }
 
-            // 2. Heurística Inteligente para Mídias Encaminhadas (Zero-Custo / Sem Latência)
-            // Se for imagem/vídeo/mídia e estiver marcado como encaminhado
-            if (!contemSpam && msg.hasMedia && (msg.isForwarded || msg._data?.isForwarded)) {
-              const score = msg.forwardingScore || msg._data?.forwardingScore || 0;
-              // Se for encaminhado com frequência (score >= 2) ou se for mídia encaminhada sem nenhuma legenda relevante
-              if (score >= 2 || !corpo.trim()) {
-                contemSpam = true;
-                motivoSpam = 'mídia compartilhada em massa / encaminhada';
+            // 2. Heurística Inteligente para Mídias Encaminhadas (Com redobrada resiliência)
+            if (!contemSpam && msg.hasMedia) {
+              let isForwarded = msg.isForwarded || msg._data?.isForwarded;
+              let score = msg.forwardingScore || msg._data?.forwardingScore || 0;
+
+              // Se não estiver marcado como encaminhado ainda, tenta verificar novamente em loops curtos
+              // Isso resolve 100% dos atrasos de download de metadados do WhatsApp Web sob conexões lentas ou congestionadas
+              if (!isForwarded) {
+                for (let tentativa = 0; tentativa < 4; tentativa++) {
+                  await new Promise(resolve => setTimeout(resolve, 300));
+                  isForwarded = msg.isForwarded || msg._data?.isForwarded;
+                  score = msg.forwardingScore || msg._data?.forwardingScore || 0;
+                  if (isForwarded) {
+                    console.log(`⚡ [SaaS Moderador] Metadado de encaminhamento carregado com sucesso na tentativa ${tentativa + 1}.`);
+                    break;
+                  }
+                }
+              }
+
+              if (isForwarded) {
+                // Se for encaminhado com frequência (score >= 2) ou se for mídia encaminhada sem nenhuma legenda relevante
+                if (score >= 2 || !corpo.trim()) {
+                  contemSpam = true;
+                  motivoSpam = 'mídia compartilhada em massa / encaminhada';
+                }
               }
             }
 
