@@ -647,8 +647,8 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
 
             // 2. Heurística Inteligente para Mídias Encaminhadas (Zero-Custo / Sem Latência)
             // Se for imagem/vídeo/mídia e estiver marcado como encaminhado
-            if (!contemSpam && msg.hasMedia && msg.isForwarded) {
-              const score = msg.forwardingScore || 0;
+            if (!contemSpam && msg.hasMedia && (msg.isForwarded || msg._data?.isForwarded)) {
+              const score = msg.forwardingScore || msg._data?.forwardingScore || 0;
               // Se for encaminhado com frequência (score >= 2) ou se for mídia encaminhada sem nenhuma legenda relevante
               if (score >= 2 || !corpo.trim()) {
                 contemSpam = true;
