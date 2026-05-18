@@ -43,14 +43,20 @@ function inicializarSessao(usuarioId, socket = null) {
 
   console.log(`⏳ Inicializando nova sessão do WhatsApp para o usuário: ${usuarioId}`);
   
-  // Limpa arquivos de trava do Chromium (SingletonLock) caso o container tenha sido reiniciado de forma abrupta
+  // Limpa arquivos de trava do Chromium (SingletonLock) caso o container tenha sido reiniciado de forma abrupta.
+  // Evitamos fs.existsSync pois ele retorna false para links simbólicos quebrados no Linux, impedindo a exclusão!
   try {
     const authPath = process.env.WWEBJS_AUTH_PATH || path.join(__dirname, '.wwebjs_auth');
     const sessionDir = path.join(authPath, `session-${usuarioId}`);
     const lockFile = path.join(sessionDir, 'SingletonLock');
-    if (fs.existsSync(lockFile)) {
+    
+    try {
       fs.unlinkSync(lockFile);
-      console.log(`🧹 Lock residual "SingletonLock" removido com sucesso para ${usuarioId}.`);
+      console.log(`🧹 Lock residual "SingletonLock" (link simbólico) removido com sucesso para ${usuarioId}.`);
+    } catch (e) {
+      if (e.code !== 'ENOENT') {
+        throw e;
+      }
     }
   } catch (err) {
     console.error(`⚠️ Falha ao limpar lock do Chromium para ${usuarioId}:`, err.message);
