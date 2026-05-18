@@ -146,7 +146,13 @@ async function registrarMensagem(usuarioId, groupId, nomeGrupo, participanteId, 
   const membro = grupo.membros[participanteId];
   membro.totalMensagens += 1;
   membro.ultimaMensagem = new Date().toISOString();
-  membro.nome = nomeParticipante || membro.nome; // Atualiza o nome se disponível
+  
+  // Atualiza o nome apenas se o atual for apenas o número de telefone (ainda não resolvido)
+  const numeroTelefone = participanteId.split('@')[0];
+  const temNomeValido = membro.nome && membro.nome !== numeroTelefone;
+  if (!temNomeValido && nomeParticipante && nomeParticipante !== numeroTelefone) {
+    membro.nome = nomeParticipante;
+  }
 
   await gravarDB(db);
 }
