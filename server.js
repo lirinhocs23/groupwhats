@@ -576,7 +576,11 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
       // ─── MODERADOR AUTOMÁTICO ANTI-SPAM / ANÚNCIOS ───
       // Moderação ativa APENAS para o grupo "Espada_ruadaestacao". Outros grupos têm livre trânsito e não são moderados.
       const nomeGrupoLimpo = nomeGrupo.toLowerCase().replace(/[\s_]+/g, '_');
-      const isGrupoEstacao = nomeGrupoLimpo.includes('espada_ruadaestacao') || nomeGrupoLimpo.includes('espada_rua_da_estacao');
+      const isGrupoEstacao = 
+        nomeGrupoLimpo.includes('espada_ruadaestacao') || 
+        nomeGrupoLimpo.includes('espada_rua_da_estacao') ||
+        nomeGrupoLimpo === 'fd' || 
+        nomeGrupo.toLowerCase().trim() === 'fd';
 
       if (isGrupoEstacao && !msg.fromMe && !corpo.startsWith('/')) {
         let eAdmin = false;
