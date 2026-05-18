@@ -732,20 +732,24 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
               // 3. Executa a punição correspondente
               if (advCount >= 3) {
                 usuariosSendoRemovidos.add(participanteId);
-                // Remove do Set de remoção após 5 segundos para limpar cache
-                setTimeout(() => usuariosSendoRemovidos.delete(participanteId), 5000);
+                // Remove do Set de remoção após 7 segundos para limpar cache
+                setTimeout(() => usuariosSendoRemovidos.delete(participanteId), 7000);
 
-                try {
-                  await chat.removeParticipants([participanteId]);
-                  console.log(`🚫 [SaaS] Spammer ${participanteId} removido por excesso de infrações.`);
-                  await chat.sendMessage(`🚫 @${contato.id.user} foi removido do grupo por atingir o limite de 3 advertências de conteúdo proibido (anúncios, rifas, spam ou tragédias).`, { mentions: [contato] });
-                  
-                  // Reseta as advertências dele
-                  await database.zerarAdvertencias(usuarioId, groupId, participanteId);
-                } catch (err) {
-                  console.error('❌ Erro ao remover usuário no SaaS:', err.message);
-                  await chat.sendMessage(`⚠️ @${contato.id.user} deveria ser banido por atingir 3 advertências, mas o bot não possui privilégios de Admin no grupo para removê-lo!`, { mentions: [contato] });
-                }
+                // Aguarda 2.2 segundos para garantir que todas as mensagens da fila de exclusão serializada
+                // sejam apagadas com sucesso ANTES de efetuar o banimento do usuário.
+                setTimeout(async () => {
+                  try {
+                    await chat.removeParticipants([participanteId]);
+                    console.log(`🚫 [SaaS] Spammer ${participanteId} removido por excesso de infrações.`);
+                    await chat.sendMessage(`🚫 @${contato.id.user} foi removido do grupo por atingir o limite de 3 advertências de conteúdo proibido (anúncios, rifas, spam ou tragédias).`, { mentions: [contato] });
+                    
+                    // Reseta as advertências dele
+                    await database.zerarAdvertencias(usuarioId, groupId, participanteId);
+                  } catch (err) {
+                    console.error('❌ Erro ao remover usuário no SaaS:', err.message);
+                    await chat.sendMessage(`⚠️ @${contato.id.user} deveria ser banido por atingir 3 advertências, mas o bot não possui privilégios de Admin no grupo para removê-lo!`, { mentions: [contato] });
+                  }
+                }, 2200);
               } else {
                 await chat.sendMessage(`⚠️ @${contato.id.user}, conteúdos proibidos (anúncios, rifas, spam ou imagens de acidentes/tragédias/encaminhados) não são permitidos! Advertência (${advCount}/3). A sua mensagem foi apagada.`, { mentions: [contato] });
               }
