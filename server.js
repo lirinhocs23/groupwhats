@@ -616,8 +616,9 @@ async function restaurarSessoesAnteriores() {
     const dados = await database.obterGrupos('usr_1'); // Força leitura
     const dbJson = await database.buscarSessao('usr_1'); // Verifica sessões antigas
     
-    // Lê todas as sessões salvas no JSON
-    const conteudoDB = await fs.readJson(path.join(__dirname, 'db_saas.json'));
+    // Lê todas as sessões salvas no JSON de forma dinâmica
+    const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'db_saas.json');
+    const conteudoDB = await fs.readJson(dbPath);
     const sessoesConectadas = conteudoDB.sessoes.filter(s => s.status === 'conectado' || s.status === 'qr');
 
     if (sessoesConectadas.length > 0) {
