@@ -1022,10 +1022,10 @@ function adicionarLogSeguranca(log) {
   }
 }
 
-document.getElementById('btn-toggle-logs').addEventListener('click', (e) => {
-  e.stopPropagation();
+document.getElementById('logs-header').addEventListener('click', (e) => {
   const panel = document.getElementById('live-logs-panel');
-  const chevron = e.currentTarget.querySelector('i');
+  const chevron = document.getElementById('btn-toggle-logs').querySelector('i');
+  
   panel.classList.toggle('collapsed');
   if (panel.classList.contains('collapsed')) {
     chevron.className = 'fa-solid fa-chevron-up';

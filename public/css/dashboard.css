@@ -1511,11 +1511,12 @@ body {
 }
 
 .live-logs-panel.collapsed {
-  transform: translateY(calc(100% - 50px));
+  transform: translateY(calc(100% - 56px));
 }
 
 .logs-header {
-  padding: 15px 20px;
+  height: 56px;
+  padding: 0 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1530,6 +1531,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin: 0;
 }
 
 .logs-badge {
