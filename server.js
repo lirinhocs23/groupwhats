@@ -772,7 +772,7 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
                   try {
                     await chat.removeParticipants([participanteId]);
                     console.log(`🚫 [SaaS] Spammer ${participanteId} removido por excesso de infrações.`);
-                    await chat.sendMessage(`🚫 @${contato.id.user} foi removido do grupo por atingir o limite de 3 advertências de conteúdo proibido (anúncios, rifas, spam ou tragédias).`, { mentions: [contato] });
+                    await chat.sendMessage(`🚫 @${contato.id.user} foi removido do grupo por atingir o limite de 3 advertências de conteúdo proibido (Conforme Regras do Grupo).`, { mentions: [contato] });
                     
                     // Reseta as advertências dele
                     await database.zerarAdvertencias(usuarioId, groupId, participanteId);
@@ -782,7 +782,15 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
                   }
                 }, 2200);
               } else {
-                await chat.sendMessage(`⚠️ @${contato.id.user}, conteúdos proibidos (anúncios, rifas, spam ou imagens de acidentes/tragédias/encaminhados) não são permitidos! Advertência (${advCount}/3). A sua mensagem foi apagada.`, { mentions: [contato] });
+                // Aguarda 2.0 segundos para garantir que todas as mídias encaminhadas na fila sequencial
+                // já tenham sido apagadas com sucesso do grupo ANTES de enviar o aviso.
+                setTimeout(async () => {
+                  try {
+                    await chat.sendMessage(`⚠️ @${contato.id.user}, conteúdos proibidos (Conforme Regras do Grupo) não são permitidos! Advertência (${advCount}/3). A sua mensagem foi apagada.`, { mentions: [contato] });
+                  } catch (err) {
+                    console.error('❌ Erro ao enviar mensagem de advertência:', err.message);
+                  }
+                }, 2000);
               }
 
               return; // Interrompe para não salvar nas estatísticas gerais
