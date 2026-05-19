@@ -610,9 +610,32 @@ function renderizarTabelaMembros(membros) {
 
 // ─── 🚫 AÇÃO: BANIR MEMBRO MANUALMENTE PELO PAINEL ───
 async function banirMembroManual(numero) {
-  if (confirm(`⚠️ ALERTA DE BANIMENTO:\nTem certeza que deseja remover o contato ${numero} do grupo?\nEsta ação será efetuada instantaneamente via robô!`)) {
-    alert(`Comando de banimento para ${numero} enviado! O bot master no celular processará a exclusão.`);
-    // Em produção, isso bateria em uma rota POST /api/ban do backend para enviar a solicitação
+  if (confirm(`⚠️ ALERTA DE BANIMENTO:\nTem certeza que deseja remover o contato ${numero} do grupo?\nEsta ação será efetuada instantaneamente via robô no WhatsApp!`)) {
+    try {
+      const response = await fetch('/api/ban', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          usuarioId: currentUser.id,
+          groupId: selectedGroupId,
+          numero: numero
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        alert(`✅ Sucesso: O contato ${numero} foi banido do grupo com sucesso!`);
+        // Recarrega as estatísticas do grupo para atualizar a tabela na hora
+        carregarEstatisticasGrupo(selectedGroupId);
+      } else {
+        alert(`❌ Erro ao banir: ${data.error || 'Erro desconhecido'}`);
+      }
+    } catch (err) {
+      console.error('Erro de rede ao banir:', err);
+      alert('❌ Erro de rede: Não foi possível conectar ao servidor para banir o membro.');
+    }
   }
 }
 

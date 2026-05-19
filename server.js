@@ -960,6 +960,41 @@ app.post('/api/disconnect', async (req, res) => {
   }
 });
 
+// Rota de banimento manual pelo painel
+app.post('/api/ban', async (req, res) => {
+  const { usuarioId, groupId, numero } = req.body;
+  if (!usuarioId || !groupId || !numero) {
+    return res.status(400).json({ error: 'Todos os campos são obrigatórios!' });
+  }
+
+  try {
+    const sessao = sessoesAtivas[usuarioId];
+    if (!sessao || sessao.status !== 'conectado') {
+      return res.status(400).json({ error: 'O bot de WhatsApp não está conectado!' });
+    }
+
+    const chat = await sessao.client.getChatById(groupId);
+    if (!chat.isGroup) {
+      return res.status(400).json({ error: 'O chat informado não é um grupo!' });
+    }
+
+    // Formata o ID do participante
+    const participanteId = numero.includes('@') ? numero : `${numero}@c.us`;
+
+    // Efetua a remoção
+    await chat.removeParticipants([participanteId]);
+    console.log(`🚫 [SaaS] Membro ${participanteId} banido manualmente pelo painel web.`);
+    
+    // Reseta as advertências dele se houver
+    await database.zerarAdvertencias(usuarioId, groupId, participanteId);
+
+    res.json({ success: true, message: 'Membro removido com sucesso do grupo!' });
+  } catch (err) {
+    console.error('❌ Erro ao banir membro manualmente:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Alterar senha do usuário
 app.post('/api/change-password', async (req, res) => {
   const { usuarioId, currentPassword, newPassword } = req.body;
