@@ -1,3 +1,4 @@
+process.env.TZ = 'America/Sao_Paulo';
 const fs = require('fs-extra');
 const path = require('path');
 const dayjs = require('dayjs');

@@ -1,3 +1,4 @@
+process.env.TZ = 'America/Sao_Paulo';
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
