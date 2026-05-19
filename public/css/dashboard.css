@@ -1640,6 +1640,12 @@ body {
   border: 1px solid rgba(255, 56, 56, 0.3);
 }
 
+.log-badge-acao.allow {
+  background: rgba(0, 240, 160, 0.12);
+  color: #00f0a0;
+  border: 1px solid rgba(0, 240, 160, 0.25);
+}
+
 @media (max-width: 900px) {
   .moderation-grid {
     grid-template-columns: 1fr;

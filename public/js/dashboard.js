@@ -1001,7 +1001,11 @@ function adicionarLogSeguranca(log) {
   const nome = log.nome || 'Membro';
   const motivo = log.motivo || 'conteúdo impróprio';
   const acao = log.acao || 'DELETE';
-  const badgeClass = acao.toLowerCase() === 'ban' ? 'ban' : 'delete';
+  
+  let badgeClass = 'delete';
+  if (acao.toLowerCase() === 'ban') badgeClass = 'ban';
+  if (acao.toLowerCase() === 'allow' || acao.toLowerCase() === 'liberado') badgeClass = 'allow';
+  
   const badgeLabel = acao.toUpperCase();
   
   item.innerHTML = `
@@ -1016,7 +1020,7 @@ function adicionarLogSeguranca(log) {
   
   body.insertBefore(item, body.firstChild);
   
-  if (panel.classList.contains('collapsed')) {
+  if (panel.classList.contains('collapsed') && acao.toLowerCase() !== 'allow' && acao.toLowerCase() !== 'liberado') {
     panel.classList.add('pulse-alert');
     setTimeout(() => panel.classList.remove('pulse-alert'), 1000);
   }

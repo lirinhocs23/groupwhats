@@ -211,7 +211,12 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
         {
           parts: [
             {
-              text: "Analise esta imagem enviada em um grupo de chat. Ela contém cenas de acidentes de trânsito, capotamento, carros destruídos, tragédias, violência física, sangue, mutilação ou conteúdo chocante/sensacionalista/gore? Responda apenas com a palavra SIM ou NAO."
+              text: "Analise esta imagem enviada em um grupo de chat. Ela se enquadra em alguma destas categorias proibidas:\n" +
+                    "1. Cenas de acidentes de trânsito, capotamento, carros destruídos, tragédias, violência física, sangue, mutilação ou conteúdo chocante/gore.\n" +
+                    "2. Anúncios, prints, panfletos ou banners promovendo jogos de azar, cassinos online, apostas esportivas, robô do pix, plataformas de ganhos rápidos (como Fortune Tiger/Tigrinho, Blaze, Betano).\n" +
+                    "3. Panfletos de venda de produtos alheios à Tradição de Espadas/fogos de artifício (como rifas de carros/celulares ou propagandas de outros negócios comuns).\n\n" +
+                    "Nota: Fotos de espadas artesanais de fogo, pólvora, bambus, prensa de barro ou fogueiras são PERMITIDAS e não devem ser bloqueadas.\n" +
+                    "Responda estritamente apenas com a palavra SIM se contiver conteúdo proibido, ou NAO se for permitido/seguro."
             },
             {
               inlineData: {
@@ -758,14 +763,30 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
 
             if (contemTermoComercial) {
               // Verifica se há pelo menos um termo da tradição na mensagem para liberar
+              let termoTradicaoDetetado = '';
               const temContextoTradicao = termosTradicao.some(termoT => {
                 const regex = new RegExp('\\b' + termoT + '\\b', 'i');
-                return regex.test(corpoNormalizado);
+                const match = regex.test(corpoNormalizado);
+                if (match) {
+                  termoTradicaoDetetado = termoT;
+                }
+                return match;
               });
 
               if (!temContextoTradicao) {
                 contemSpam = true;
                 motivoSpam = `termo comercial/rifa ("${termoComercialDetetado}") fora do contexto da Tradição de Espadas`;
+              } else {
+                // Emitimos log de mensagem comercial LIBERADA
+                const nomeParticipante = msg._data.notifyName || participanteId.split('@')[0];
+                io.to(usuarioId).emit('log_seguranca', {
+                  data: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+                  grupo: nomeGrupo,
+                  membro: participanteId.split('@')[0],
+                  nome: nomeParticipante,
+                  acao: 'ALLOW',
+                  motivo: `Termo comercial/rifa ("${termoComercialDetetado}") liberado por citar a Tradição de Espadas ("${termoTradicaoDetetado}")`
+                });
               }
             }
           }
