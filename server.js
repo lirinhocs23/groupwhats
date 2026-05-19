@@ -9,6 +9,25 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const database = require('./database');
 const dayjs = require('dayjs');
 
+// Buffer de logs na memória para depuração remota rápida do SaaS
+const debugLogs = [];
+const originalLog = console.log;
+const originalError = console.error;
+
+console.log = function(...args) {
+  originalLog.apply(console, args);
+  const dataHora = new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  debugLogs.push(`[${dataHora}] [LOG] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')}`);
+  if (debugLogs.length > 500) debugLogs.shift();
+};
+
+console.error = function(...args) {
+  originalError.apply(console, args);
+  const dataHora = new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  debugLogs.push(`[${dataHora}] [ERROR] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')}`);
+  if (debugLogs.length > 500) debugLogs.shift();
+};
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -1079,6 +1098,11 @@ app.post('/api/register', async (req, res) => {
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
+});
+
+// Rota para depuração de console remota segura no SaaS
+app.get('/api/debug-logs', (req, res) => {
+  res.type('text/plain').send(debugLogs.join('\n'));
 });
 
 // Listar grupos monitorados (com sincronização em tempo real se estiver conectado)
