@@ -289,7 +289,7 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
       };
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`;
     const payload = {
       contents: [{
         parts: [
@@ -340,7 +340,10 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
       return 'SIM'; // O vídeo continha violência pesada.
     }
 
-    const textoResposta = data.candidates?.[0]?.content?.parts?.[0]?.text?.toUpperCase() || 'NAO';
+    const textoOriginal = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sem resposta de texto';
+    console.log(`🧠 [Moderador IA] Resposta bruta do Gemini: "${textoOriginal.trim()}"`);
+
+    const textoResposta = textoOriginal.toUpperCase();
     return textoResposta.includes('SIM') ? 'SIM' : 'NAO';
   } catch (err) {
     console.error('⚠️ Erro na análise de visão do Gemini:', err.message);
