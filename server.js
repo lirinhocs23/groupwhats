@@ -227,15 +227,26 @@ async function encerrarSessao(usuarioId, forcarLogoff = false) {
  */
 async function analisarImagemComIA(base64Data, mimeType, apiKey) {
   try {
-    let payloadPart;
+    const parts = [
+      {
+        text: "Você é um moderador rigoroso de um grupo de WhatsApp focado APENAS em cultura de fogos e espadas juninas.\n" +
+          "Assista aos frames do vídeo ou veja esta imagem. Se houver QUALQUER UMA das coisas abaixo, responda SIM.\n\n" +
+          "1. ACIDENTES E CARROS BATIDOS: Qualquer cena mostrando um carro batido, acidente de trânsito, colisão, capotamento, viaturas de resgate, pessoas feridas ou mortas nas ruas.\n" +
+          "2. SPAM DE APOSTAS/GOLPES: Panfletos promovendo jogos de azar, cassinos, apostas esportivas, robô do pix, etc.\n" +
+          "3. PROPAGANDAS: Venda de carros, motos, rifas ou itens normais.\n\n" +
+          "⚠️ REGRAS DE LIBERAÇÃO (EXCEÇÕES):\n" +
+          "- Se mostrar apenas pessoas soltando fogos de artifício (espadas de fogo artesanais), fogueiras, faíscas festivas e NÃO tiver carros batidos nem acidentes, você DEVE responder NAO.\n" +
+          "- Cartazes de programações de festas locais e shows juninos também respondem NAO.\n\n" +
+          "Responda ESTRITAMENTE apenas com a palavra SIM se tiver conteúdo proibido (como carro batido/acidente/apostas), ou NAO se for apenas fogos/fogueira ou seguro."
+      }
+    ];
 
     if (mimeType.startsWith('video/')) {
-      console.log(`⏳ [Moderador IA] Vídeo detectado. Extraindo o frame central com FFmpeg para análise ultra-rápida...`);
+      console.log(`⏳ [Moderador IA] Vídeo detectado. Extraindo 3 frames (início, meio, fim) com FFmpeg para garantir precisão...`);
       const buffer = Buffer.from(base64Data, 'base64');
       const tmpDir = os.tmpdir();
       const id = crypto.randomUUID();
       const videoPath = path.join(tmpDir, `${id}.mp4`);
-      const framePath = path.join(tmpDir, `${id}.jpg`);
 
       try {
         fs.writeFileSync(videoPath, buffer);
@@ -243,52 +254,41 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
         await new Promise((resolve, reject) => {
           ffmpeg(videoPath)
             .screenshots({
-              timestamps: ['50%'], // Extrai a imagem exatamente do meio do vídeo
-              filename: `${id}.jpg`,
+              timestamps: ['25%', '50%', '75%'], // Pega começo, meio e fim
+              filename: `${id}_%i.jpg`,
               folder: tmpDir
             })
             .on('end', resolve)
             .on('error', err => {
-              console.error(`⚠️ FFmpeg falhou ao extrair frame:`, err.message);
+              console.error(`⚠️ FFmpeg falhou ao extrair frames:`, err.message);
               reject(err);
             });
         });
         
-        console.log(`✅ [Moderador IA] Frame extraído! Enviando a foto estática para o Gemini Flash...`);
-        const frameBuffer = fs.readFileSync(framePath);
-        payloadPart = {
-          inlineData: { mimeType: 'image/jpeg', data: frameBuffer.toString('base64') }
-        };
+        console.log(`✅ [Moderador IA] Frames extraídos! Enviando fotos para o Gemini Flash...`);
+        for (let i = 1; i <= 3; i++) {
+          const framePath = path.join(tmpDir, `${id}_${i}.jpg`);
+          if (fs.existsSync(framePath)) {
+            const frameBuffer = fs.readFileSync(framePath);
+            parts.push({
+              inlineData: { mimeType: 'image/jpeg', data: frameBuffer.toString('base64') }
+            });
+            fs.unlinkSync(framePath); // Limpa imagem logo após ler
+          }
+        }
       } finally {
-        // Garantir que os arquivos pesados são limpos do servidor para não estourar disco
         if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
-        if (fs.existsSync(framePath)) fs.unlinkSync(framePath);
       }
     } else {
       // Imagens podem ir via inlineData rapidamente
-      payloadPart = {
+      parts.push({
         inlineData: { mimeType: mimeType, data: base64Data }
-      };
+      });
     }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
     const payload = {
-      contents: [{
-        parts: [
-          {
-            text: "Você é um moderador rigoroso de um grupo de WhatsApp focado APENAS em cultura de fogos e espadas juninas.\n" +
-              "Assista ao vídeo ou veja esta imagem. Se houver QUALQUER UMA das coisas abaixo, responda SIM.\n\n" +
-              "1. ACIDENTES E CARROS BATIDOS: Qualquer cena mostrando um carro batido, acidente de trânsito, colisão, capotamento, viaturas de resgate, pessoas feridas ou mortas nas ruas.\n" +
-              "2. SPAM DE APOSTAS/GOLPES: Panfletos promovendo jogos de azar, cassinos, apostas esportivas, robô do pix, etc.\n" +
-              "3. PROPAGANDAS: Venda de carros, motos, rifas ou itens normais.\n\n" +
-              "⚠️ REGRAS DE LIBERAÇÃO (EXCEÇÕES):\n" +
-              "- Se o vídeo mostrar apenas pessoas soltando fogos de artifício (espadas de fogo artesanais), fogueiras, faíscas festivas e NÃO tiver carros batidos nem acidentes, você DEVE responder NAO.\n" +
-              "- Cartazes de programações de festas locais e shows juninos também respondem NAO.\n\n" +
-              "Responda ESTRITAMENTE apenas com a palavra SIM se tiver conteúdo proibido (como carro batido/acidente/apostas), ou NAO se for apenas fogos/fogueira ou seguro."
-          },
-          payloadPart
-        ]
-      }],
+      contents: [{ parts: parts }],
       safetySettings: [
         { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
         { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
