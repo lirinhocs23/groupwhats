@@ -289,7 +289,7 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
       };
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
     const payload = {
       contents: [{
         parts: [
@@ -315,11 +315,17 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
       ]
     };
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45000); // 45 segundos de limite
+
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
+    
+    clearTimeout(timeout);
 
     if (!res.ok) {
       const errData = await res.json();
