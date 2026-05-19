@@ -695,6 +695,8 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
           console.error('⚠️ Erro ao verificar privilégios no Moderador SaaS:', e.message);
         }
 
+        console.log(`👤 [DEBUG] Verificação de Admin no grupo "${nomeGrupo}" para o remetente ${participanteId}: eAdmin = ${eAdmin}`);
+
         if (!eAdmin) {
           // Se for mídia, aguarda 500ms para garantir que todos os metadados (como isForwarded) foram recebidos e preenchidos no objeto pelo whatsapp-web.js
           if (msg.hasMedia) {
