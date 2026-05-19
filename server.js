@@ -50,14 +50,14 @@ function inicializarSessao(usuarioId, socket = null) {
   }
 
   console.log(`⏳ Inicializando nova sessão do WhatsApp para o usuário: ${usuarioId}`);
-  
+
   // Limpa arquivos de trava do Chromium (SingletonLock) caso o container tenha sido reiniciado de forma abrupta.
   // Evitamos fs.existsSync pois ele retorna false para links simbólicos quebrados no Linux, impedindo a exclusão!
   try {
     const authPath = process.env.WWEBJS_AUTH_PATH || path.join(__dirname, '.wwebjs_auth');
     const sessionDir = path.join(authPath, `session-${usuarioId}`);
     const lockFile = path.join(sessionDir, 'SingletonLock');
-    
+
     try {
       fs.unlinkSync(lockFile);
       console.log(`🧹 Lock residual "SingletonLock" (link simbólico) removido com sucesso para ${usuarioId}.`);
@@ -110,7 +110,7 @@ function inicializarSessao(usuarioId, socket = null) {
       sessoesAtivas[usuarioId].qr = qr;
     }
     database.salvarSessao(usuarioId, `session_${usuarioId}`, 'qr');
-    
+
     // Notifica o cliente específico via Socket.io
     io.to(usuarioId).emit('status', { status: 'qr', qr, numero: '' });
   });
@@ -119,7 +119,7 @@ function inicializarSessao(usuarioId, socket = null) {
   client.on('ready', async () => {
     const numero = client.info.wid.user;
     console.log(`✅ WhatsApp conectado com sucesso para o usuário ${usuarioId} (${numero})`);
-    
+
     if (sessoesAtivas[usuarioId]) {
       sessoesAtivas[usuarioId].status = 'conectado';
       sessoesAtivas[usuarioId].qr = '';
@@ -176,7 +176,7 @@ function inicializarSessao(usuarioId, socket = null) {
  */
 async function encerrarSessao(usuarioId, forcarLogoff = false) {
   console.log(`🔌 Encerrando sessão do WhatsApp para o usuário: ${usuarioId} (Logoff completo: ${forcarLogoff})`);
-  
+
   if (sessoesAtivas[usuarioId]) {
     const { client } = sessoesAtivas[usuarioId];
     try {
@@ -212,11 +212,11 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
           parts: [
             {
               text: "Analise esta imagem enviada em um grupo de chat. Ela se enquadra em alguma destas categorias proibidas:\n" +
-                    "1. Cenas de acidentes de trânsito, capotamento, carros destruídos, tragédias, violência física, sangue, mutilação ou conteúdo chocante/gore.\n" +
-                    "2. Anúncios, prints, panfletos ou banners promovendo jogos de azar, cassinos online, apostas esportivas, robô do pix, plataformas de ganhos rápidos (como Fortune Tiger/Tigrinho, Blaze, Betano).\n" +
-                    "3. Panfletos de venda de produtos alheios à Tradição de Espadas/fogos de artifício (como rifas de carros/celulares ou propagandas de outros negócios comuns).\n\n" +
-                    "Nota: Fotos de espadas artesanais de fogo, pólvora, bambus, prensa de barro ou fogueiras são PERMITIDAS e não devem ser bloqueadas.\n" +
-                    "Responda estritamente apenas com a palavra SIM se contiver conteúdo proibido, ou NAO se for permitido/seguro."
+                "1. Cenas de acidentes de trânsito, capotamento, carros destruídos, tragédias, violência física, sangue, mutilação ou conteúdo chocante/gore.\n" +
+                "2. Anúncios, prints, panfletos ou banners promovendo jogos de azar, cassinos online, apostas esportivas, robô do pix, plataformas de ganhos rápidos (como Fortune Tiger/Tigrinho, Blaze, Betano).\n" +
+                "3. Panfletos de venda de produtos alheios à Tradição de Espadas/fogos de artifício (como rifas de carros/celulares ou propagandas de outros negócios comuns).\n\n" +
+                "Nota: Fotos de espadas artesanais de fogo, pólvora, bambus, prensa de barro ou fogueiras são PERMITIDAS e não devem ser bloqueadas.\n" +
+                "Responda estritamente apenas com a palavra SIM se contiver conteúdo proibido, ou NAO se for permitido/seguro."
             },
             {
               inlineData: {
@@ -239,7 +239,7 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
       console.warn(`⚠️ API Gemini respondeu com status de erro: ${res.status}`);
       return 'NAO';
     }
-    
+
     const data = await res.json();
     const textoResposta = data.candidates?.[0]?.content?.parts?.[0]?.text?.toUpperCase() || 'NAO';
     return textoResposta.includes('SIM') ? 'SIM' : 'NAO';
@@ -289,12 +289,12 @@ async function deletarMensagemComFila(msg) {
  */
 function normalizarTextoParaFiltro(texto) {
   if (!texto) return '';
-  
+
   let textoNormalizado = texto.toLowerCase();
-  
+
   // Normaliza acentuações Unicode
   textoNormalizado = textoNormalizado.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  
+
   // Substitui leetspeak comum
   const leetMap = {
     '@': 'a',
@@ -307,17 +307,17 @@ function normalizarTextoParaFiltro(texto) {
     '5': 's',
     '$': 's'
   };
-  
+
   for (const [leet, normal] of Object.entries(leetMap)) {
     textoNormalizado = textoNormalizado.replaceAll(leet, normal);
   }
-  
+
   // Remove emojis, asteriscos, hifens, pontos e caracteres especiais, mantendo apenas letras, números e espaços
   textoNormalizado = textoNormalizado.replace(/[^a-z0-9\s]/g, '');
-  
+
   // Substitui múltiplos espaços por um espaço simples e apara as pontas
   textoNormalizado = textoNormalizado.replace(/\s+/g, ' ').trim();
-  
+
   return textoNormalizado;
 }
 
@@ -332,7 +332,7 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
         return;
       }
       mensagensProcessadas.add(msg.id.id);
-      
+
       // Limpa periodicamente o Set para não estourar a memória
       if (mensagensProcessadas.size > 2000) {
         mensagensProcessadas.clear();
@@ -347,8 +347,8 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
       const groupId = chat.id._serialized;
       const nomeGrupo = chat.name;
       let participanteId = msg.author || msg.from;
-      
-       // Se for LID, mapeia para o número de celular real JID (@c.us) para manter compatibilidade total no banco
+
+      // Se for LID, mapeia para o número de celular real JID (@c.us) para manter compatibilidade total no banco
       if (participanteId && participanteId.endsWith('@lid')) {
         try {
           const contato = await msg.getContact();
@@ -363,7 +363,7 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
           console.error('⚠️ Falha ao mapear LID no recebimento de mensagem:', err.message);
         }
       }
-      
+
       // Ignora mensagens do próprio bot
       if (participanteId === client.info.wid._serialized) return;
 
@@ -656,10 +656,10 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
       // ─── MODERADOR AUTOMÁTICO ANTI-SPAM / ANÚNCIOS ───
       // Moderação ativa APENAS para o grupo "Espada_ruadaestacao". Outros grupos têm livre trânsito e não são moderados.
       const nomeGrupoLimpo = nomeGrupo.toLowerCase().replace(/[\s_]+/g, '_');
-      const isGrupoEstacao = 
-        nomeGrupoLimpo.includes('espada_ruadaestacao') || 
+      const isGrupoEstacao =
+        nomeGrupoLimpo.includes('espada_ruadaestacao') ||
         nomeGrupoLimpo.includes('espada_rua_da_estacao') ||
-        nomeGrupoLimpo === 'fd' || 
+        nomeGrupoLimpo === 'fd' ||
         nomeGrupo.toLowerCase().trim() === 'fd';
 
       if (isGrupoEstacao && !msg.fromMe && !corpo.startsWith('/')) {
@@ -693,22 +693,22 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
           // 1. Filtro de Termos Proibidos Absolutos (Sempre bloqueados)
           const termosAbsolutos = [
             // Apostas, Cassinos e Jogos de Azar
-            'aposta', 'bets', 'betano', 'blaze', 'cassino', 'casino', 'roleta', 'slots', 
+            'aposta', 'bets', 'betano', 'blaze', 'cassino', 'casino', 'roleta', 'slots',
             'tigrinho', 'fortune tiger', 'fortune ox', 'fortune rabbit', 'sorte online',
             'link de aposta', 'aposta ganhadora', 'previsao de jogo', 'esporte bets',
-            
+
             // Plataformas de Ganhos Suspeitos / Renda Extra
-            'plataforma pagando', 'ganhos suspeitos', 'renda extra', 'ganhe dinheiro', 
+            'plataforma pagando', 'ganhos suspeitos', 'renda extra', 'ganhe dinheiro',
             'ganho garantido', 'investimento garantido', 'robo do pix',
             'oportunidade unica', 'renda facil', 'dinheiro rapido',
-            
+
             // Spam e Correntes
-            'repasse para', 'compartilhe com', 'se voce nao enviar', 'mensagem de sorte', 
+            'repasse para', 'compartilhe com', 'se voce nao enviar', 'mensagem de sorte',
             'corrente',
-            
+
             // Termos de Tragédia / Acidentes (Segurança)
-            'acidente', 'acidentes', 'colisao', 'capotou', 'capotamento', 'baleado', 
-            'baleados', 'assassinato', 'homicidio', 'obito', 'vitima', 'vitimas', 
+            'acidente', 'acidentes', 'colisao', 'capotou', 'capotamento', 'baleado',
+            'baleados', 'assassinato', 'homicidio', 'obito', 'vitima', 'vitimas',
             'morreu', 'faleceu', 'corpo', 'necroterio', 'tragedia', 'grave acidente'
           ];
 
@@ -739,13 +739,13 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
           // 3. Filtro de Termos Comerciais e Rifas Condicionais (Bloqueia apenas se não contiver termos da tradição de espadas)
           if (!contemSpam && !termosCustomizados) {
             const termosTradicao = [
-              'espada', 'espadas', 'polvora', 'barro', 'bambivis', 'prensa', 'bambu', 
+              'espada', 'espadas', 'polvora', 'barro', 'bambivis', 'prensa', 'bambu',
               'fogueira', 'corda', 'pilao', 'cilindro'
             ];
-            
+
             const termosCondicionais = [
-              'vendo', 'vende se', 'compre', 'comprar', 'compra', 'chama no pv', 'chama pv', 'chama no zap', 
-              'valor', 'interessados', 'rifa', 'rifas', 'sorteio', 'sorteios', 'cota', 'cotas', 
+              'vendo', 'vende se', 'compre', 'comprar', 'compra', 'chama no pv', 'chama pv', 'chama no zap',
+              'valor', 'interessados', 'rifa', 'rifas', 'sorteio', 'sorteios', 'cota', 'cotas',
               'acao entre amigos', 'bilhete', 'bilhetes', 'oportunidade de emprego', 'trabalhe'
             ];
 
@@ -791,168 +791,168 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             }
           }
 
-            // 2. Filtro de Links Inteligente (Anti-Link)
-            if (!contemSpam) {
-              const urlRegex = /(https?:\/\/[^\s]+)/gi;
-              if (urlRegex.test(corpo)) {
-                // Identifica se há links permitidos configurados
-                const whitelistLinks = (grupoConfig && grupoConfig.linksPermitidos) || [];
-                
-                // Isolamos os links encontrados no texto
-                const matches = corpo.match(urlRegex) || [];
-                let linkNaoAutorizado = false;
-                let linkDetetado = '';
+          // 2. Filtro de Links Inteligente (Anti-Link)
+          if (!contemSpam) {
+            const urlRegex = /(https?:\/\/[^\s]+)/gi;
+            if (urlRegex.test(corpo)) {
+              // Identifica se há links permitidos configurados
+              const whitelistLinks = (grupoConfig && grupoConfig.linksPermitidos) || [];
 
-                for (const urlStr of matches) {
-                  try {
-                    const parsedUrl = new URL(urlStr.startsWith('http') ? urlStr : `http://${urlStr}`);
-                    const hostname = parsedUrl.hostname.toLowerCase().replace('www.', '');
-                    
-                    // Verifica se o hostname está na whitelist ou se algum domínio da whitelist é sufixo dele
-                    const estaNaWhitelist = whitelistLinks.some(allowedDomain => {
-                      const domainClean = allowedDomain.toLowerCase().trim().replace('www.', '');
-                      return hostname === domainClean || hostname.endsWith('.' + domainClean);
-                    });
+              // Isolamos os links encontrados no texto
+              const matches = corpo.match(urlRegex) || [];
+              let linkNaoAutorizado = false;
+              let linkDetetado = '';
 
-                    if (!estaNaWhitelist) {
-                      linkNaoAutorizado = true;
-                      linkDetetado = hostname;
-                      break;
-                    }
-                  } catch (e) {
-                    // Se falhar o parseamento, assume que é suspeito
+              for (const urlStr of matches) {
+                try {
+                  const parsedUrl = new URL(urlStr.startsWith('http') ? urlStr : `http://${urlStr}`);
+                  const hostname = parsedUrl.hostname.toLowerCase().replace('www.', '');
+
+                  // Verifica se o hostname está na whitelist ou se algum domínio da whitelist é sufixo dele
+                  const estaNaWhitelist = whitelistLinks.some(allowedDomain => {
+                    const domainClean = allowedDomain.toLowerCase().trim().replace('www.', '');
+                    return hostname === domainClean || hostname.endsWith('.' + domainClean);
+                  });
+
+                  if (!estaNaWhitelist) {
                     linkNaoAutorizado = true;
-                    linkDetetado = urlStr.substring(0, 30);
+                    linkDetetado = hostname;
                     break;
                   }
+                } catch (e) {
+                  // Se falhar o parseamento, assume que é suspeito
+                  linkNaoAutorizado = true;
+                  linkDetetado = urlStr.substring(0, 30);
+                  break;
                 }
+              }
 
-                if (linkNaoAutorizado) {
+              if (linkNaoAutorizado) {
+                contemSpam = true;
+                motivoSpam = `envio de link não autorizado (${linkDetetado})`;
+              }
+            }
+          }
+
+          // 3. Heurística Inteligente para Mídias Encaminhadas (Com redobrada resiliência)
+          if (!contemSpam && msg.hasMedia) {
+            let isForwarded = msg.isForwarded || msg._data?.isForwarded || msg._data?.contextInfo?.isForwarded;
+            let score = msg.forwardingScore || msg._data?.forwardingScore || msg._data?.contextInfo?.forwardingScore || 0;
+
+            if (!isForwarded) {
+              for (let tentativa = 0; tentativa < 6; tentativa++) {
+                await new Promise(resolve => setTimeout(resolve, 300));
+                isForwarded = msg.isForwarded || msg._data?.isForwarded || msg._data?.contextInfo?.isForwarded;
+                score = msg.forwardingScore || msg._data?.forwardingScore || msg._data?.contextInfo?.forwardingScore || 0;
+                if (isForwarded) {
+                  console.log(`⚡ [SaaS Moderador] Metadado de encaminhamento carregado com sucesso na tentativa ${tentativa + 1}.`);
+                  break;
+                }
+              }
+            }
+
+            if (isForwarded) {
+              if (score >= 2 || !corpo.trim()) {
+                contemSpam = true;
+                motivoSpam = 'mídia compartilhada em massa / encaminhada';
+              }
+            }
+          }
+
+          // 4. Análise Avançada de Imagem por IA (Opcional - Ativo se houver GEMINI_API_KEY)
+          if (!contemSpam && msg.hasMedia && process.env.GEMINI_API_KEY) {
+            try {
+              const media = await msg.downloadMedia();
+              if (media && media.mimetype.startsWith('image/')) {
+                console.log(`🤖 [Moderador IA] Analisando imagem de ${participanteId} com Gemini Vision...`);
+                const resultadoIA = await analisarImagemComIA(media.data, media.mimetype, process.env.GEMINI_API_KEY);
+                if (resultadoIA === 'SIM') {
                   contemSpam = true;
-                  motivoSpam = `envio de link não autorizado (${linkDetetado})`;
+                  motivoSpam = 'conteúdo visual impróprio detectado por Inteligência Artificial (cena de acidente/tragédia)';
                 }
               }
+            } catch (err) {
+              console.error('⚠️ Falha ao baixar ou analisar mídia com IA:', err.message);
+            }
+          }
+
+          if (contemSpam) {
+            console.log(`🚨 [SaaS] SPAM/CONTEÚDO PROIBIDO DETECTADO de ${participanteId} no grupo "${nomeGrupo}": "${motivoSpam}"`);
+
+            // 1. Apaga a mensagem na hora! (Fila serializada para evitar concorrência de cliques no Puppeteer)
+            try {
+              await deletarMensagemComFila(msg);
+            } catch (err) {
+              console.error('❌ Falha ao enfileirar deleção de mensagem:', err.message);
             }
 
-            // 3. Heurística Inteligente para Mídias Encaminhadas (Com redobrada resiliência)
-            if (!contemSpam && msg.hasMedia) {
-              let isForwarded = msg.isForwarded || msg._data?.isForwarded || msg._data?.contextInfo?.isForwarded;
-              let score = msg.forwardingScore || msg._data?.forwardingScore || msg._data?.contextInfo?.forwardingScore || 0;
+            // Evita concorrência e spam do próprio bot
+            if (usuariosSendoRemovidos.has(participanteId)) {
+              return;
+            }
 
-              if (!isForwarded) {
-                for (let tentativa = 0; tentativa < 6; tentativa++) {
-                  await new Promise(resolve => setTimeout(resolve, 300));
-                  isForwarded = msg.isForwarded || msg._data?.isForwarded || msg._data?.contextInfo?.isForwarded;
-                  score = msg.forwardingScore || msg._data?.forwardingScore || msg._data?.contextInfo?.forwardingScore || 0;
-                  if (isForwarded) {
-                    console.log(`⚡ [SaaS Moderador] Metadado de encaminhamento carregado com sucesso na tentativa ${tentativa + 1}.`);
-                    break;
-                  }
+            // Debounce de Avisos e Advertências (Máximo 1 aviso/advertência a cada 3 segundos por usuário)
+            const agoraTime = Date.now();
+            const ultimoAviso = ultimosAvisosEnviados[participanteId] || 0;
+            if (agoraTime - ultimoAviso < 3000) {
+              console.log(`⏳ [SaaS Moderador] Evitando aviso/advertência duplicada em lote para ${participanteId}.`);
+              return;
+            }
+            ultimosAvisosEnviados[participanteId] = agoraTime;
+
+            // 2. Registra advertência de forma persistente
+            const advCount = await database.registrarAdvertencia(usuarioId, groupId, participanteId);
+            const contato = await msg.getContact();
+            const nomeMembro = contato ? (contato.name || contato.pushname || participanteId.split('@')[0]) : 'Membro';
+
+            // Notifica o painel em tempo real sobre o log de moderação via Websocket
+            io.to(usuarioId).emit('log_seguranca', {
+              timestamp: dayjs().format('HH:mm:ss'),
+              grupo: nomeGrupo,
+              membro: participanteId.replace('@c.us', ''),
+              nome: nomeMembro,
+              motivo: motivoSpam,
+              acao: advCount >= 3 ? 'BAN' : 'DELETE'
+            });
+
+            // 3. Executa a punição correspondente
+            if (advCount >= 3) {
+              usuariosSendoRemovidos.add(participanteId);
+              setTimeout(() => usuariosSendoRemovidos.delete(participanteId), 7000);
+
+              setTimeout(async () => {
+                try {
+                  await chat.removeParticipants([participanteId]);
+                  console.log(`🚫 [SaaS] Spammer ${participanteId} removido por excesso de infrações.`);
+                  await chat.sendMessage(`🚫 @${contato.id.user} foi removido do grupo por atingir o limite de 3 advertências de conteúdo proibido (Conforme Regras do Grupo).`, { mentions: [contato] });
+
+                  // Reseta as advertências dele
+                  await database.zerarAdvertencias(usuarioId, groupId, participanteId);
+                } catch (err) {
+                  console.error('❌ Erro ao remover usuário no SaaS:', err.message);
+                  await chat.sendMessage(`⚠️ @${contato.id.user} deveria ser banido por atingir 3 advertências, mas o bot não possui privilégios de Admin no grupo para removê-lo!`, { mentions: [contato] });
                 }
-              }
-
-              if (isForwarded) {
-                if (score >= 2 || !corpo.trim()) {
-                  contemSpam = true;
-                  motivoSpam = 'mídia compartilhada em massa / encaminhada';
+              }, 2200);
+            } else {
+              setTimeout(async () => {
+                try {
+                  await chat.sendMessage(`⚠️ @${contato.id.user}, conteúdos proibidos (Conforme Regras do Grupo). Advertência (${advCount}/3). A sua mensagem foi apagada.`, { mentions: [contato] });
+                } catch (err) {
+                  console.error('❌ Erro ao enviar mensagem de advertência:', err.message);
                 }
-              }
+              }, 2000);
             }
 
-            // 4. Análise Avançada de Imagem por IA (Opcional - Ativo se houver GEMINI_API_KEY)
-            if (!contemSpam && msg.hasMedia && process.env.GEMINI_API_KEY) {
-              try {
-                const media = await msg.downloadMedia();
-                if (media && media.mimetype.startsWith('image/')) {
-                  console.log(`🤖 [Moderador IA] Analisando imagem de ${participanteId} com Gemini Vision...`);
-                  const resultadoIA = await analisarImagemComIA(media.data, media.mimetype, process.env.GEMINI_API_KEY);
-                  if (resultadoIA === 'SIM') {
-                    contemSpam = true;
-                    motivoSpam = 'conteúdo visual impróprio detectado por Inteligência Artificial (cena de acidente/tragédia)';
-                  }
-                }
-              } catch (err) {
-                console.error('⚠️ Falha ao baixar ou analisar mídia com IA:', err.message);
-              }
-            }
-
-            if (contemSpam) {
-              console.log(`🚨 [SaaS] SPAM/CONTEÚDO PROIBIDO DETECTADO de ${participanteId} no grupo "${nomeGrupo}": "${motivoSpam}"`);
-
-              // 1. Apaga a mensagem na hora! (Fila serializada para evitar concorrência de cliques no Puppeteer)
-              try {
-                await deletarMensagemComFila(msg);
-              } catch (err) {
-                console.error('❌ Falha ao enfileirar deleção de mensagem:', err.message);
-              }
-
-              // Evita concorrência e spam do próprio bot
-              if (usuariosSendoRemovidos.has(participanteId)) {
-                return;
-              }
-
-              // Debounce de Avisos e Advertências (Máximo 1 aviso/advertência a cada 3 segundos por usuário)
-              const agoraTime = Date.now();
-              const ultimoAviso = ultimosAvisosEnviados[participanteId] || 0;
-              if (agoraTime - ultimoAviso < 3000) {
-                console.log(`⏳ [SaaS Moderador] Evitando aviso/advertência duplicada em lote para ${participanteId}.`);
-                return;
-              }
-              ultimosAvisosEnviados[participanteId] = agoraTime;
-
-              // 2. Registra advertência de forma persistente
-              const advCount = await database.registrarAdvertencia(usuarioId, groupId, participanteId);
-              const contato = await msg.getContact();
-              const nomeMembro = contato ? (contato.name || contato.pushname || participanteId.split('@')[0]) : 'Membro';
-
-              // Notifica o painel em tempo real sobre o log de moderação via Websocket
-              io.to(usuarioId).emit('log_seguranca', {
-                timestamp: dayjs().format('HH:mm:ss'),
-                grupo: nomeGrupo,
-                membro: participanteId.replace('@c.us', ''),
-                nome: nomeMembro,
-                motivo: motivoSpam,
-                acao: advCount >= 3 ? 'BAN' : 'DELETE'
-              });
-
-              // 3. Executa a punição correspondente
-              if (advCount >= 3) {
-                usuariosSendoRemovidos.add(participanteId);
-                setTimeout(() => usuariosSendoRemovidos.delete(participanteId), 7000);
-
-                setTimeout(async () => {
-                  try {
-                    await chat.removeParticipants([participanteId]);
-                    console.log(`🚫 [SaaS] Spammer ${participanteId} removido por excesso de infrações.`);
-                    await chat.sendMessage(`🚫 @${contato.id.user} foi removido do grupo por atingir o limite de 3 advertências de conteúdo proibido (Conforme Regras do Grupo).`, { mentions: [contato] });
-                    
-                    // Reseta as advertências dele
-                    await database.zerarAdvertencias(usuarioId, groupId, participanteId);
-                  } catch (err) {
-                    console.error('❌ Erro ao remover usuário no SaaS:', err.message);
-                    await chat.sendMessage(`⚠️ @${contato.id.user} deveria ser banido por atingir 3 advertências, mas o bot não possui privilégios de Admin no grupo para removê-lo!`, { mentions: [contato] });
-                  }
-                }, 2200);
-              } else {
-                setTimeout(async () => {
-                  try {
-                    await chat.sendMessage(`⚠️ @${contato.id.user}, conteúdos proibidos (Conforme Regras do Grupo) não são permitidos! Advertência (${advCount}/3). A sua mensagem foi apagada.`, { mentions: [contato] });
-                  } catch (err) {
-                    console.error('❌ Erro ao enviar mensagem de advertência:', err.message);
-                  }
-                }, 2000);
-              }
-
-              return; // Interrompe para não salvar nas estatísticas gerais
-            }
+            return; // Interrompe para não salvar nas estatísticas gerais
+          }
+        }
       }
-    }
 
       // Obtém o nome de exibição do remetente
       const nomeParticipante = msg._data.notifyName || participanteId.split('@')[0];
 
       await database.registrarMensagem(usuarioId, groupId, nomeGrupo, participanteId, nomeParticipante);
-      
+
       // Notifica o painel web para atualizar os gráficos em tempo real se o cliente estiver conectado
       io.to(usuarioId).emit('nova_mensagem', { groupId });
     }
@@ -967,10 +967,10 @@ async function restaurarSessoesAnteriores() {
   try {
     const db = await database.inicializarDB();
     const dbCompleto = await database.buscarUsuario('admin', 'admin'); // Apenas garante inicialização
-    
+
     const dados = await database.obterGrupos('usr_1'); // Força leitura
     const dbJson = await database.buscarSessao('usr_1'); // Verifica sessões antigas
-    
+
     // Lê todas as sessões salvas no JSON de forma dinâmica
     const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'db_saas.json');
     const conteudoDB = await fs.readJson(dbPath);
@@ -1070,7 +1070,7 @@ app.get('/api/stats/:groupId', async (req, res) => {
   try {
     let participantes = null;
     let mensagensRecentes = [];
-    
+
     // Se o bot estiver online, busca a lista real e atualizada de participantes
     const sessao = sessoesAtivas[usuarioId];
     if (sessao && sessao.status === 'conectado') {
@@ -1132,7 +1132,7 @@ app.post('/api/ban', async (req, res) => {
     // Efetua a remoção
     await chat.removeParticipants([participanteId]);
     console.log(`🚫 [SaaS] Membro ${participanteId} banido manualmente pelo painel web.`);
-    
+
     // Reseta as advertências dele se houver
     await database.zerarAdvertencias(usuarioId, groupId, participanteId);
 
@@ -1235,7 +1235,7 @@ io.on('connection', (socket) => {
   socket.on('join_room', ({ usuarioId }) => {
     socket.join(usuarioId);
     console.log(`👥 Usuário ${usuarioId} entrou na sala WebSocket correspondente.`);
-    
+
     // Se já houver sessão ativa na memória, envia o status atual na hora
     if (sessoesAtivas[usuarioId]) {
       const sessao = sessoesAtivas[usuarioId];
@@ -1266,6 +1266,6 @@ server.listen(PORT, async () => {
   console.log(`🚀 PAINEL WEB SAAS INICIADO COM SUCESSO!`);
   console.log(`🌐 Endereço Local: http://localhost:${PORT}`);
   console.log(`====================================================`);
-  
+
   await restaurarSessoesAnteriores();
 });
