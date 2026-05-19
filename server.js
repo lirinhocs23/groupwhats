@@ -254,13 +254,29 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
       // Esperar o vídeo ser processado (estado ACTIVE)
       let isActive = fileInfo.file.state === 'ACTIVE';
       let attempts = 0;
+      
+      if (!isActive) {
+        console.log(`⏳ [Moderador IA] Vídeo enviado para nuvem. Aguardando processamento... (Pode levar até 30s)`);
+      }
+
       while (!isActive && attempts < 15) {
         await new Promise(r => setTimeout(r, 2000)); // Aguarda 2 segundos
         const checkRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`);
         const checkData = await checkRes.json();
-        if (checkData.state === 'ACTIVE') isActive = true;
-        else if (checkData.state === 'FAILED') throw new Error('Falha no processamento do vídeo pelo Gemini.');
+        
+        if (checkData.state === 'ACTIVE') {
+          isActive = true;
+          console.log(`✅ [Moderador IA] Vídeo processado na nuvem! Analisando frames...`);
+        } else if (checkData.state === 'FAILED') {
+          throw new Error('Falha no processamento do vídeo pelo Gemini.');
+        } else {
+          console.log(`⏳ [Moderador IA] Ainda processando vídeo... (Tentativa ${attempts + 1}/15)`);
+        }
         attempts++;
+      }
+
+      if (!isActive) {
+        throw new Error('Tempo limite excedido aguardando o Google processar o vídeo.');
       }
 
       payloadPart = {
@@ -290,7 +306,13 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
           },
           payloadPart
         ]
-      }]
+      }],
+      safetySettings: [
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" }
+      ]
     };
 
     const res = await fetch(url, {
@@ -300,11 +322,24 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
     });
 
     if (!res.ok) {
-      console.warn(`⚠️ API Gemini respondeu com status de erro: ${res.status}`);
+      const errData = await res.json();
+      console.warn(`⚠️ API Gemini respondeu com erro HTTP ${res.status}:`, JSON.stringify(errData));
       return 'NAO';
     }
 
     const data = await res.json();
+    
+    // Verifica se a resposta foi bloqueada pelos filtros de segurança do Google
+    if (data.promptFeedback && data.promptFeedback.blockReason) {
+      console.warn(`⚠️ IA bloqueou a análise por motivo de segurança: ${data.promptFeedback.blockReason}`);
+      // Como somos moderação, se o Google bloqueou por "violência", é óbvio que devemos banir o vídeo!
+      return 'SIM'; 
+    }
+    if (data.candidates && data.candidates[0] && data.candidates[0].finishReason === 'SAFETY') {
+      console.warn(`⚠️ Resposta da IA bloqueada por conter cenas muito pesadas/violentas (SAFETY).`);
+      return 'SIM'; // O vídeo continha violência pesada.
+    }
+
     const textoResposta = data.candidates?.[0]?.content?.parts?.[0]?.text?.toUpperCase() || 'NAO';
     return textoResposta.includes('SIM') ? 'SIM' : 'NAO';
   } catch (err) {
