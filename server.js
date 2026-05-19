@@ -660,27 +660,33 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             let listaTermos = (grupoConfig && grupoConfig.termosProibidos && grupoConfig.termosProibidos.length > 0)
               ? grupoConfig.termosProibidos
               : [
-                  'vendo', 'vende-se', 'compre', 'oportunidade única', 'oportunidade unica', 'som automotivo',
-                  'chama no pv', 'chama no pv interessados', 'interessados chamar no pv', 'chama no inbox', 
-                  'chama pv', 'chama no zap', 'valor no pv', 'chamar no pv', 'promoção de hoje', 
-                  'venda de carro', 'venda de moto', 'geladeira usada', 'plataforma pagando', 
-                  'tigrinho pagando', 'link de aposta', 'olx.com', 'mercadolivre.com', 'zé da barata', 
-                  'ze da barata', 'ligue e contrate', 'contratar', 'contrate', 'ligue', 'propaganda', 
-                  'propagandas', 'anunciar', 'anuncio', 'anúncio', 'vender', 'vende-se-loja', 
-                  'vende-se lojinha', 'vende-se loja virtual', 'comprar', 'promoção', 'sorte online', 
-                  'trabalhe em casa', 'renda extra', 'dinheiro rápido', 'ganhe dinheiro', 'emprego', 
-                  'vaga', 'oportunidade de emprego', 'trabalhe', 'aposta ganhadora', 'investimento garantido', 
-                  'previsão de jogo', 'esporte bets', 'imax control', 'control',
+                  // Apostas, Cassinos e Jogos de Azar
+                  'aposta', 'bets', 'betano', 'blaze', 'cassino', 'casino', 'roleta', 'slots', 
+                  'tigrinho', 'fortune tiger', 'fortune ox', 'fortune rabbit', 'sorte online',
+                  'link de aposta', 'aposta ganhadora', 'previsão de jogo', 'esporte bets',
+                  
+                  // Plataformas de Ganhos Suspeitos / Renda Extra
+                  'plataforma pagando', 'ganhos suspeitos', 'renda extra', 'ganhe dinheiro', 
+                  'trabalhe em casa', 'ganho garantido', 'investimento garantido', 'robô do pix',
+                  'robo do pix', 'oportunidade única', 'oportunidade unica', 'renda fácil', 
+                  'renda facil', 'dinheiro rápido', 'dinheiro rapido',
+                  
+                  // Spam, Anúncios e Correntes
+                  'repasse para', 'compartilhe com', 'se você não enviar', 'mensagem de sorte', 
+                  'corrente', 'chama no pv', 'chama no zap', 'chama pv', 'chama no inbox',
+                  'compre', 'vendo', 'vende-se', 'oportunidade de emprego', 'trabalhe',
+                  
                   // Termos de Rifeiro / Rifa
                   'rifa', 'rifas', 'rifeiro', 'rifeiros', 'bilhete', 'bilhetes', 'sorteio', 
                   'sorteios', 'cota', 'cotas', 'ação entre amigos', 'acao entre amigos', 
                   'rifa online', 'adquira seu bilhete', 'adquira sua cota', 'compra de cota', 
-                  'comprar cota', 'tabela de rifa', 'tabela de rifas', 'adquira já', 'adquira ja',
+                  'comprar cota', 'tabela de rifa', 'tabela de rifas',
+                  
                   // Termos de Tragédia / Acidentes
                   'acidente', 'acidentes', 'colisão', 'colisao', 'capotou', 'capotamento', 'baleado', 
                   'baleados', 'assassinato', 'homicídio', 'homicidio', 'óbito', 'obito', 'vítima', 
                   'vitima', 'vítimas', 'vitimas', 'morreu', 'faleceu', 'corpo', 'necrotério', 
-                  'tragédia', 'tragedia', 'grave acidente', 'morador de', 'mecânico', 'mecanico'
+                  'tragédia', 'tragedia', 'grave acidente'
                 ];
 
             let contemSpam = false;
