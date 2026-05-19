@@ -271,6 +271,56 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
 }
 
 /**
+ * Analisa o contexto de um texto usando a API do Gemini 1.5 Flash.
+ * Utilizado para desempatar falsos positivos de palavras-chave.
+ */
+async function analisarTextoComIA(texto, apiKey) {
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const payload = {
+      contents: [
+        {
+          parts: [
+            {
+              text: `Você é um moderador de um grupo de WhatsApp.
+Um membro enviou a seguinte mensagem de texto:
+"${texto}"
+
+Regras do grupo:
+1. SPAM/GOLPES/COMÉRCIO: É estritamente proibido vender coisas, fazer anúncios de produtos normais, rifas genéricas ou promover jogos de aposta (Tigrinho, cassino, robô do pix).
+2. TRAGÉDIAS E VIOLÊNCIA: É estritamente proibido relatos sérios de acidentes de trânsito reais, mortes acidentais, violência ou sangue.
+3. CONVERSAS NORMAIS: Mensagens cotidianas inofensivas, uso de gírias, figuras de linguagem como "morreu de rir", "compra pão", relato de falecimento natural de familiar, SÃO TOTALMENTE PERMITIDOS.
+
+Analise o CONTEXTO da mensagem acima.
+Responda ESTRITAMENTE apenas com a palavra SIM se a mensagem tem a clara intenção de quebrar as regras 1 ou 2.
+Responda ESTRITAMENTE apenas com a palavra NAO se a mensagem for apenas um bate-papo inofensivo usando palavras do dia a dia, mesmo que contenha palavras como "morreu", "compra", "acidente" fora de contexto malicioso.`
+            }
+          ]
+        }
+      ]
+    };
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      console.warn(`⚠️ API Gemini Texto respondeu com status de erro: ${res.status}`);
+      return 'NAO'; // Em caso de falha de rede, é melhor permitir do que bloquear injustamente
+    }
+
+    const data = await res.json();
+    const textoResposta = data.candidates?.[0]?.content?.parts?.[0]?.text?.toUpperCase() || 'NAO';
+    return textoResposta.includes('SIM') ? 'SIM' : 'NAO';
+  } catch (err) {
+    console.error('⚠️ Erro na análise de texto do Gemini:', err.message);
+    return 'NAO';
+  }
+}
+
+/**
  * Fila sequencial assíncrona para exclusão de mensagens
  */
 async function processarFilaDelecao() {
@@ -812,6 +862,27 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
                   motivo: `Termo comercial/rifa ("${termoComercialDetetado}") liberado por citar a Tradição de Espadas ("${termoTradicaoDetetado}")`
                 });
               }
+            }
+          }
+
+          // INTEGRAÇÃO DE CONTEXTO IA (VERIFICAÇÃO DE FALSOS POSITIVOS)
+          // Se as listas de palavras (Regex) detectaram algo suspeito, pedimos a opinião da IA antes de punir
+          if (contemSpam && process.env.GEMINI_API_KEY) {
+            console.log(`🤖 [Moderador IA] Verificando contexto do texto de ${participanteId} com Gemini para evitar falso positivo...`);
+            const resultadoIA = await analisarTextoComIA(corpo, process.env.GEMINI_API_KEY);
+            if (resultadoIA === 'NAO') {
+              // Liberado pela IA (Era uma conversa normal ou gíria)
+              const nomeParticipante = msg._data.notifyName || participanteId.split('@')[0];
+              io.to(usuarioId).emit('log_seguranca', {
+                data: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+                grupo: nomeGrupo,
+                membro: participanteId.split('@')[0],
+                nome: nomeParticipante,
+                acao: 'ALLOW',
+                motivo: `Texto liberado pela IA de contexto. (Falso positivo de "${motivoSpam}")`
+              });
+              contemSpam = false; // Desfaz a acusação de spam
+              motivoSpam = '';
             }
           }
 
