@@ -284,13 +284,43 @@
           </div>
         </div>
 
+        <!-- Grid de Moderação Avançada -->
+        <div class="moderation-grid">
+          <div class="glass-card config-card">
+            <div class="config-header">
+              <h3><i class="fa-solid fa-shield-halved text-purple"></i> Configurações de Moderação</h3>
+              <button id="btn-salvar-config" class="btn-primary-mini"><i class="fa-solid fa-save"></i> Salvar Regras</button>
+            </div>
+            <div class="form-group-mini">
+              <label for="input-keywords">Termos Proibidos (Separados por vírgula)</label>
+              <textarea id="input-keywords" rows="3" placeholder="Ex: rifa, aposta, tigrinho, compre, vendo..."></textarea>
+            </div>
+            <div class="form-group-mini">
+              <label for="input-links">Links Permitidos / Whitelist de Domínios</label>
+              <textarea id="input-links" rows="2" placeholder="Ex: youtube.com, instagram.com, google.com..."></textarea>
+            </div>
+          </div>
+          <div class="glass-card vision-card">
+            <h3><i class="fa-solid fa-eye text-teal"></i> Simulador Gemini Vision IA</h3>
+            <div class="upload-dropzone" id="dropzone-ia">
+              <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
+              <p>Arraste ou clique para testar imagem contra spam/violência</p>
+              <input type="file" id="file-ia" accept="image/*" class="hidden">
+            </div>
+            <div id="vision-result" class="vision-result hidden"></div>
+          </div>
+        </div>
+
         <!-- Tabela Completa de Membros -->
         <div class="glass-card table-card">
           <div class="table-header">
             <h3>Lista Detalhada de Participantes</h3>
-            <div class="table-search-box">
-              <i class="fa-solid fa-magnifying-glass"></i>
-              <input type="text" id="membro-search" placeholder="Buscar por número ou nome...">
+            <div class="table-actions-wrapper">
+              <button id="btn-export-csv" class="btn-secondary-mini"><i class="fa-solid fa-file-csv"></i> Exportar CSV</button>
+              <div class="table-search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="membro-search" placeholder="Buscar por número ou nome...">
+              </div>
             </div>
           </div>
           <div class="table-responsive">
@@ -302,16 +332,31 @@
                   <th>Mensagens</th>
                   <th>Última Interação</th>
                   <th>Dias Sem Falar</th>
+                  <th>Advertências</th>
                   <th>Status</th>
                   <th>Ações</th>
                 </tr>
               </thead>
               <tbody id="membros-table-body">
                 <tr>
-                  <td colspan="7" class="loading-td">Carregando dados dos membros...</td>
+                  <td colspan="8" class="loading-td">Carregando dados dos membros...</td>
                 </tr>
               </tbody>
             </table>
+          </div>
+        </div>
+
+        <!-- Central de Logs de Segurança ao Vivo (Sticky Bottom Panel) -->
+        <div class="live-logs-panel glass-card collapsed" id="live-logs-panel">
+          <div class="logs-header" id="logs-header">
+            <h4><i class="fa-solid fa-terminal text-primary"></i> LOGS DE SEGURANÇA EM TEMPO REAL <span class="logs-badge" id="logs-count">0</span></h4>
+            <div class="logs-actions">
+              <button id="btn-clear-logs" class="btn-clear-logs" title="Limpar Logs"><i class="fa-solid fa-trash-can"></i></button>
+              <button id="btn-toggle-logs" class="btn-toggle-logs" title="Expandir/Recolher"><i class="fa-solid fa-chevron-up"></i></button>
+            </div>
+          </div>
+          <div class="logs-body" id="logs-body">
+            <div class="no-logs">Nenhuma atividade de moderação registrada nesta sessão.</div>
           </div>
         </div>
       </div>

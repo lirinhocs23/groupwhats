@@ -414,7 +414,8 @@ async function obterEstatisticasGrupo(usuarioId, groupId, diasInativoDefault = 3
       totalMensagens: totalMsg,
       ultimaMensagem: ultimaMsgStr ? dayjs(ultimaMsgStr).format('DD/MM/YYYY HH:mm') : 'Nunca',
       diasSemFalar: ultimaMsgStr ? diasSemFalar : '∞',
-      status
+      status,
+      advertencias: (grupo && grupo.advertencias && grupo.advertencias[membroId]) || 0
     });
   }
 
@@ -433,7 +434,9 @@ async function obterEstatisticasGrupo(usuarioId, groupId, diasInativoDefault = 3
       total: membrosList.length
     },
     ranking,
-    membrosList
+    membrosList,
+    termosProibidos: (grupo && grupo.termosProibidos) || [],
+    linksPermitidos: (grupo && grupo.linksPermitidos) || []
   };
 }
 
@@ -480,6 +483,42 @@ async function zerarAdvertencias(usuarioId, groupId, membroId) {
   }
 }
 
+/**
+ * Salva as palavras proibidas customizadas de um grupo.
+ */
+async function salvarTermosProibidos(usuarioId, groupId, termos) {
+  const db = await lerDB();
+  if (!db.atividade[usuarioId]) {
+    db.atividade[usuarioId] = {};
+  }
+  if (!db.atividade[usuarioId][groupId]) {
+    db.atividade[usuarioId][groupId] = {
+      nomeGrupo: 'Grupo',
+      membros: {}
+    };
+  }
+  db.atividade[usuarioId][groupId].termosProibidos = termos;
+  await gravarDB(db);
+}
+
+/**
+ * Salva a whitelist de domínios (links permitidos) de um grupo.
+ */
+async function salvarLinksPermitidos(usuarioId, groupId, links) {
+  const db = await lerDB();
+  if (!db.atividade[usuarioId]) {
+    db.atividade[usuarioId] = {};
+  }
+  if (!db.atividade[usuarioId][groupId]) {
+    db.atividade[usuarioId][groupId] = {
+      nomeGrupo: 'Grupo',
+      membros: {}
+    };
+  }
+  db.atividade[usuarioId][groupId].linksPermitidos = links;
+  await gravarDB(db);
+}
+
 async function alterarSenha(usuarioId, senhaAtual, novaSenha) {
   const db = await lerDB();
   const usuario = db.usuarios.find(u => u.id === usuarioId);
@@ -506,6 +545,8 @@ module.exports = {
   registrarGrupoVazio,
   registrarAdvertencia,
   zerarAdvertencias,
+  salvarTermosProibidos,
+  salvarLinksPermitidos,
   obterGrupos,
   obterEstatisticasGrupo
 };

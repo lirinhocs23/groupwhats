@@ -259,6 +259,11 @@ function conectarSocket() {
       carregarEstatisticasGrupo(selectedGroupId, true); // Recarrega silenciosamente
     }
   });
+
+  // Recebe logs de segurança em tempo real
+  socket.on('log_seguranca', (log) => {
+    adicionarLogSeguranca(log);
+  });
 }
 
 // ─── 📊 ATUALIZAR INTERFACE DA CONEXÃO WHATSAPP ───
@@ -401,7 +406,7 @@ async function carregarEstatisticasGrupo(groupId, silenciarFeedback = false) {
     // Exibe placeholder de loading na tabela
     dom.membrosTableBody.innerHTML = `
       <tr>
-        <td colspan="7" class="loading-td"><i class="fa-solid fa-spinner fa-spin"></i> Atualizando dados analíticos...</td>
+        <td colspan="8" class="loading-td"><i class="fa-solid fa-spinner fa-spin"></i> Atualizando dados analíticos...</td>
       </tr>
     `;
   }
@@ -420,6 +425,10 @@ async function carregarEstatisticasGrupo(groupId, silenciarFeedback = false) {
     
     // Atualiza gráficos
     atualizarGraficos(stats);
+    
+    // Atualiza textareas com configurações do banco de dados local
+    document.getElementById('input-keywords').value = (stats.termosProibidos || []).join(', ');
+    document.getElementById('input-links').value = (stats.linksPermitidos || []).join(', ');
     
     // Atualiza tabela
     membrosGrupoCache = stats.membrosList;
@@ -571,7 +580,7 @@ function renderizarTabelaMembros(membros) {
   if (membros.length === 0) {
     dom.membrosTableBody.innerHTML = `
       <tr>
-        <td colspan="7" class="loading-td">Nenhum membro encontrado com os critérios de filtro informados.</td>
+        <td colspan="8" class="loading-td">Nenhum membro encontrado com os critérios de filtro informados.</td>
       </tr>
     `;
     return;
@@ -583,12 +592,26 @@ function renderizarTabelaMembros(membros) {
     if (m.status.includes('Fantasma') || m.status.includes('Inativo')) statusClass = 'badge-fantasma';
     
     const tr = document.createElement('tr');
+    
+    const adv = m.advertencias || 0;
+    let warningClass = 'warning-0';
+    if (adv === 1) warningClass = 'warning-1';
+    if (adv >= 2) warningClass = 'warning-2';
+
     tr.innerHTML = `
       <td style="font-weight: 500; color: #fff;">${m.numero}</td>
       <td>${m.nome || '-'}</td>
       <td style="font-weight: 600;">${m.totalMensagens}</td>
       <td>${m.ultimaMensagem}</td>
       <td style="text-align: center;">${m.diasSemFalar}</td>
+      <td style="text-align: center;">
+        <span class="warning-badge ${warningClass}">${adv}/3</span>
+        ${adv > 0 ? `
+          <button class="btn-shield-reset" data-num="${m.numero}" title="Perdoar / Resetar Advertências">
+            <i class="fa-solid fa-shield-heart"></i>
+          </button>
+        ` : ''}
+      </td>
       <td><span class="table-badge ${statusClass}">${m.status}</span></td>
       <td>
         <button class="btn-ban-action" data-id="${m.id}" data-num="${m.numero}">
@@ -604,6 +627,15 @@ function renderizarTabelaMembros(membros) {
     btn.addEventListener('click', (e) => {
       const num = e.currentTarget.getAttribute('data-num');
       banirMembroManual(num);
+    });
+  });
+
+  // Adiciona listeners para os botões de Reset de Advertências
+  document.querySelectorAll('.btn-shield-reset').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const num = e.currentTarget.getAttribute('data-num');
+      perdoarAdvertenciasManual(num);
     });
   });
 }
@@ -757,4 +789,256 @@ document.addEventListener('click', (e) => {
       dom.sidebarMenu.classList.remove('active');
     }
   }
+});
+
+// ─── 🛡️ AÇÃO: PERDOAR / ZERAR ADVERTÊNCIAS ───
+async function perdoarAdvertenciasManual(numero) {
+  if (confirm(`🛡️ Resetar Infrações:\nDeseja zerar todas as advertências do contato ${numero}?\nO escudo protetor será ativado e sua contagem voltará para 0.`)) {
+    try {
+      const response = await fetch('/api/warnings/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          usuarioId: currentUser.id,
+          groupId: selectedGroupId,
+          numero: numero
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        // Atualiza a tabela imediatamente
+        carregarEstatisticasGrupo(selectedGroupId);
+      } else {
+        alert(`❌ Erro ao zerar advertências: ${data.error || 'Erro desconhecido'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('❌ Erro de rede: Não foi possível conectar ao servidor para redefinir advertências.');
+    }
+  }
+}
+
+// ─── 🛡️ SALVAR REGRAS DE CONFIGURAÇÃO DE MODERAÇÃO ───
+document.getElementById('btn-salvar-config').addEventListener('click', async () => {
+  if (!selectedGroupId) return;
+  const btn = document.getElementById('btn-salvar-config');
+  const originalHtml = btn.innerHTML;
+  
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Salvando...`;
+  
+  const keywordsText = document.getElementById('input-keywords').value;
+  const linksText = document.getElementById('input-links').value;
+  
+  const termos = keywordsText.split(',').map(s => s.trim()).filter(s => s.length > 0);
+  const links = linksText.split(',').map(s => s.trim()).filter(s => s.length > 0);
+  
+  try {
+    const resKeywords = await fetch(`/api/groups/${selectedGroupId}/keywords`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usuarioId: currentUser.id, termos })
+    });
+    
+    const resLinks = await fetch(`/api/groups/${selectedGroupId}/links`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usuarioId: currentUser.id, links })
+    });
+    
+    if (resKeywords.ok && resLinks.ok) {
+      btn.innerHTML = `<i class="fa-solid fa-check"></i> Regras Salvas!`;
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+      }, 1500);
+    } else {
+      throw new Error('Erro ao salvar as configurações.');
+    }
+  } catch (err) {
+    console.error(err);
+    alert('❌ Ocorreu um erro ao gravar as regras de moderação.');
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+  }
+});
+
+// ─── 🤖 SIMULADOR GEMINI VISION IA (DRAG & DROP) ───
+const dropzone = document.getElementById('dropzone-ia');
+const fileInput = document.getElementById('file-ia');
+const visionResult = document.getElementById('vision-result');
+
+dropzone.addEventListener('click', () => fileInput.click());
+
+dropzone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropzone.classList.add('dragover');
+});
+
+dropzone.addEventListener('dragleave', () => {
+  dropzone.classList.remove('dragover');
+});
+
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  const files = e.dataTransfer.files;
+  if (files.length > 0) {
+    processarArquivoIA(files[0]);
+  }
+});
+
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files.length > 0) {
+    processarArquivoIA(e.target.files[0]);
+  }
+});
+
+async function processarArquivoIA(file) {
+  if (!file.type.startsWith('image/')) {
+    alert('Por favor, selecione apenas arquivos de imagem.');
+    return;
+  }
+  
+  visionResult.className = 'vision-result';
+  visionResult.classList.remove('hidden');
+  visionResult.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Simulando análise do Gemini Vision...`;
+  
+  const reader = new FileReader();
+  reader.readAsDataURL(file);
+  reader.onload = async () => {
+    const base64Content = reader.result.split(',')[1];
+    const mimeType = file.type;
+    
+    try {
+      const response = await fetch('/api/ia/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64Data: base64Content, mimeType })
+      });
+      
+      const data = await response.json();
+      if (response.ok && data.success) {
+        const isSafe = data.resultado === 'NÃO';
+        if (isSafe) {
+          visionResult.className = 'vision-result safe';
+          visionResult.innerHTML = `<i class="fa-solid fa-circle-check"></i> <strong>IMAGEM SEGURA:</strong> O Gemini permitiu o envio.`;
+        } else {
+          visionResult.className = 'vision-result unsafe';
+          visionResult.innerHTML = `<i class="fa-solid fa-triangle-exclamation animate-bounce"></i> <strong>CONTEÚDO IMPRÓPRIO DETECTADO:</strong> Imagem violenta ou spam (O bot iria apagar!).`;
+        }
+      } else {
+        visionResult.className = 'vision-result unsafe';
+        visionResult.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <strong>ERRO:</strong> ${data.error || 'Falha na verificação.'}`;
+      }
+    } catch (err) {
+      console.error(err);
+      visionResult.className = 'vision-result unsafe';
+      visionResult.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Erro ao conectar ao servidor de IA.`;
+    }
+  };
+}
+
+// ─── 📥 EXPORTADOR CSV PROFISSIONAL ───
+document.getElementById('btn-export-csv').addEventListener('click', () => {
+  if (membrosGrupoCache.length === 0) {
+    alert('Nenhum dado disponível para exportar.');
+    return;
+  }
+  
+  const headers = ['Número', 'Nome do WhatsApp', 'Mensagens', 'Última Interação', 'Dias Sem Falar', 'Advertências', 'Status'];
+  const rows = membrosGrupoCache.map(m => [
+    m.numero,
+    m.nome || '',
+    m.totalMensagens,
+    m.ultimaMensagem,
+    m.diasSemFalar,
+    m.advertencias || 0,
+    m.status
+  ]);
+  
+  const csvContent = [headers, ...rows]
+    .map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(';'))
+    .join('\r\n');
+    
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  
+  const nomeGrupoFormatado = dom.currentGroupName.textContent.replace('Grupo: ', '').trim().replace(/[^a-z0-9]/gi, '_');
+  link.setAttribute('download', `auditoria_membros_${nomeGrupoFormatado}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.csv`);
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+});
+
+// ─── 🛡️ CENTRAL DE LOGS EM TEMPO REAL ───
+let logsCount = 0;
+
+function adicionarLogSeguranca(log) {
+  const panel = document.getElementById('live-logs-panel');
+  const badge = document.getElementById('logs-count');
+  const body = document.getElementById('logs-body');
+  
+  const noLogs = body.querySelector('.no-logs');
+  if (noLogs) {
+    noLogs.remove();
+  }
+  
+  logsCount++;
+  badge.textContent = logsCount;
+  
+  const item = document.createElement('div');
+  item.className = 'log-item';
+  
+  const time = log.timestamp || new Date().toLocaleTimeString();
+  const grupo = log.grupo || 'Grupo';
+  const membro = log.membro || '';
+  const nome = log.nome || 'Membro';
+  const motivo = log.motivo || 'conteúdo impróprio';
+  const acao = log.acao || 'DELETE';
+  const badgeClass = acao.toLowerCase() === 'ban' ? 'ban' : 'delete';
+  const badgeLabel = acao.toUpperCase();
+  
+  item.innerHTML = `
+    <div class="log-item-header">
+      <span class="log-time">[${time}]</span>
+      <span class="log-badge-acao ${badgeClass}">${badgeLabel}</span>
+    </div>
+    <div>Grupo: <strong>${grupo}</strong></div>
+    <div>Membro: <span class="log-membro">${nome} (${membro})</span></div>
+    <div>Motivo: <span class="log-motivo">${motivo}</span></div>
+  `;
+  
+  body.insertBefore(item, body.firstChild);
+  
+  if (panel.classList.contains('collapsed')) {
+    panel.classList.add('pulse-alert');
+    setTimeout(() => panel.classList.remove('pulse-alert'), 1000);
+  }
+}
+
+document.getElementById('btn-toggle-logs').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const panel = document.getElementById('live-logs-panel');
+  const chevron = e.currentTarget.querySelector('i');
+  panel.classList.toggle('collapsed');
+  if (panel.classList.contains('collapsed')) {
+    chevron.className = 'fa-solid fa-chevron-up';
+  } else {
+    chevron.className = 'fa-solid fa-chevron-down';
+  }
+});
+
+document.getElementById('btn-clear-logs').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const body = document.getElementById('logs-body');
+  const badge = document.getElementById('logs-count');
+  body.innerHTML = '<div class="no-logs">Nenhuma atividade de moderação registrada nesta sessão.</div>';
+  logsCount = 0;
+  badge.textContent = '0';
 });

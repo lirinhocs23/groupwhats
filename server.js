@@ -652,49 +652,97 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             corpoMinusculo.includes('cilindro');
 
           if (!isTradicaoEspada) {
-            const termosProibidos = [
-              'vendo', 'vende-se', 'compre', 'oportunidade única', 'oportunidade unica', 'som automotivo',
-              'chama no pv', 'chama no pv interessados', 'interessados chamar no pv', 'chama no inbox', 
-              'chama pv', 'chama no zap', 'valor no pv', 'chamar no pv', 'promoção de hoje', 
-              'venda de carro', 'venda de moto', 'geladeira usada', 'plataforma pagando', 
-              'tigrinho pagando', 'link de aposta', 'olx.com', 'mercadolivre.com', 'zé da barata', 
-              'ze da barata', 'ligue e contrate', 'contratar', 'contrate', 'ligue', 'propaganda', 
-              'propagandas', 'anunciar', 'anuncio', 'anúncio', 'vender', 'vende-se-loja', 
-              'vende-se lojinha', 'vende-se loja virtual', 'comprar', 'promoção', 'sorte online', 
-              'trabalhe em casa', 'renda extra', 'dinheiro rápido', 'ganhe dinheiro', 'emprego', 
-              'vaga', 'oportunidade de emprego', 'trabalhe', 'aposta ganhadora', 'investimento garantido', 
-              'previsão de jogo', 'esporte bets', 'imax control', 'control',
-              // Termos de Rifeiro / Rifa
-              'rifa', 'rifas', 'rifeiro', 'rifeiros', 'bilhete', 'bilhetes', 'sorteio', 
-              'sorteios', 'cota', 'cotas', 'ação entre amigos', 'acao entre amigos', 
-              'rifa online', 'adquira seu bilhete', 'adquira sua cota', 'compra de cota', 
-              'comprar cota', 'tabela de rifa', 'tabela de rifas', 'adquira já', 'adquira ja',
-              // Termos de Tragédia / Acidentes
-              'acidente', 'acidentes', 'colisão', 'colisao', 'capotou', 'capotamento', 'baleado', 
-              'baleados', 'assassinato', 'homicídio', 'homicidio', 'óbito', 'obito', 'vítima', 
-              'vitima', 'vítimas', 'vitimas', 'morreu', 'faleceu', 'corpo', 'necrotério', 
-              'tragédia', 'tragedia', 'grave acidente', 'morador de', 'mecânico', 'mecanico'
-            ];
+            // Busca as configurações customizadas do grupo se existirem no banco de dados local
+            const db = await database.lerDB();
+            const grupoConfig = db.atividade[usuarioId] && db.atividade[usuarioId][groupId];
+            
+            // 1. Termos Proibidos (Customizados ou Padrão)
+            let listaTermos = (grupoConfig && grupoConfig.termosProibidos && grupoConfig.termosProibidos.length > 0)
+              ? grupoConfig.termosProibidos
+              : [
+                  'vendo', 'vende-se', 'compre', 'oportunidade única', 'oportunidade unica', 'som automotivo',
+                  'chama no pv', 'chama no pv interessados', 'interessados chamar no pv', 'chama no inbox', 
+                  'chama pv', 'chama no zap', 'valor no pv', 'chamar no pv', 'promoção de hoje', 
+                  'venda de carro', 'venda de moto', 'geladeira usada', 'plataforma pagando', 
+                  'tigrinho pagando', 'link de aposta', 'olx.com', 'mercadolivre.com', 'zé da barata', 
+                  'ze da barata', 'ligue e contrate', 'contratar', 'contrate', 'ligue', 'propaganda', 
+                  'propagandas', 'anunciar', 'anuncio', 'anúncio', 'vender', 'vende-se-loja', 
+                  'vende-se lojinha', 'vende-se loja virtual', 'comprar', 'promoção', 'sorte online', 
+                  'trabalhe em casa', 'renda extra', 'dinheiro rápido', 'ganhe dinheiro', 'emprego', 
+                  'vaga', 'oportunidade de emprego', 'trabalhe', 'aposta ganhadora', 'investimento garantido', 
+                  'previsão de jogo', 'esporte bets', 'imax control', 'control',
+                  // Termos de Rifeiro / Rifa
+                  'rifa', 'rifas', 'rifeiro', 'rifeiros', 'bilhete', 'bilhetes', 'sorteio', 
+                  'sorteios', 'cota', 'cotas', 'ação entre amigos', 'acao entre amigos', 
+                  'rifa online', 'adquira seu bilhete', 'adquira sua cota', 'compra de cota', 
+                  'comprar cota', 'tabela de rifa', 'tabela de rifas', 'adquira já', 'adquira ja',
+                  // Termos de Tragédia / Acidentes
+                  'acidente', 'acidentes', 'colisão', 'colisao', 'capotou', 'capotamento', 'baleado', 
+                  'baleados', 'assassinato', 'homicídio', 'homicidio', 'óbito', 'obito', 'vítima', 
+                  'vitima', 'vítimas', 'vitimas', 'morreu', 'faleceu', 'corpo', 'necrotério', 
+                  'tragédia', 'tragedia', 'grave acidente', 'morador de', 'mecânico', 'mecanico'
+                ];
 
             let contemSpam = false;
             let motivoSpam = 'anúncio ou conteúdo proibido';
 
-            // 1. Verifica termos proibidos no texto/legenda
-            for (const termo of termosProibidos) {
-              if (corpoMinusculo.includes(termo)) {
+            // Verifica termos proibidos no texto/legenda
+            for (const termo of listaTermos) {
+              if (corpoMinusculo.includes(termo.toLowerCase().trim())) {
                 contemSpam = true;
                 motivoSpam = `uso de termo proibido ("${termo}")`;
                 break;
               }
             }
 
-            // 2. Heurística Inteligente para Mídias Encaminhadas (Com redobrada resiliência)
+            // 2. Filtro de Links Inteligente (Anti-Link)
+            if (!contemSpam) {
+              const urlRegex = /(https?:\/\/[^\s]+)/gi;
+              if (urlRegex.test(corpo)) {
+                // Identifica se há links permitidos configurados
+                const whitelistLinks = (grupoConfig && grupoConfig.linksPermitidos) || [];
+                
+                // Isolamos os links encontrados no texto
+                const matches = corpo.match(urlRegex) || [];
+                let linkNaoAutorizado = false;
+                let linkDetetado = '';
+
+                for (const urlStr of matches) {
+                  try {
+                    const parsedUrl = new URL(urlStr.startsWith('http') ? urlStr : `http://${urlStr}`);
+                    const hostname = parsedUrl.hostname.toLowerCase().replace('www.', '');
+                    
+                    // Verifica se o hostname está na whitelist ou se algum domínio da whitelist é sufixo dele
+                    const estaNaWhitelist = whitelistLinks.some(allowedDomain => {
+                      const domainClean = allowedDomain.toLowerCase().trim().replace('www.', '');
+                      return hostname === domainClean || hostname.endsWith('.' + domainClean);
+                    });
+
+                    if (!estaNaWhitelist) {
+                      linkNaoAutorizado = true;
+                      linkDetetado = hostname;
+                      break;
+                    }
+                  } catch (e) {
+                    // Se falhar o parseamento, assume que é suspeito
+                    linkNaoAutorizado = true;
+                    linkDetetado = urlStr.substring(0, 30);
+                    break;
+                  }
+                }
+
+                if (linkNaoAutorizado) {
+                  contemSpam = true;
+                  motivoSpam = `envio de link não autorizado (${linkDetetado})`;
+                }
+              }
+            }
+
+            // 3. Heurística Inteligente para Mídias Encaminhadas (Com redobrada resiliência)
             if (!contemSpam && msg.hasMedia) {
               let isForwarded = msg.isForwarded || msg._data?.isForwarded || msg._data?.contextInfo?.isForwarded;
               let score = msg.forwardingScore || msg._data?.forwardingScore || msg._data?.contextInfo?.forwardingScore || 0;
 
-              // Se não estiver marcado como encaminhado ainda, tenta verificar novamente em loops curtos
-              // Isso resolve 100% dos atrasos de download de metadados do WhatsApp Web sob conexões lentas ou congestionadas
               if (!isForwarded) {
                 for (let tentativa = 0; tentativa < 6; tentativa++) {
                   await new Promise(resolve => setTimeout(resolve, 300));
@@ -708,7 +756,6 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
               }
 
               if (isForwarded) {
-                // Se for encaminhado com frequência (score >= 2) ou se for mídia encaminhada sem nenhuma legenda relevante
                 if (score >= 2 || !corpo.trim()) {
                   contemSpam = true;
                   motivoSpam = 'mídia compartilhada em massa / encaminhada';
@@ -716,7 +763,7 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
               }
             }
 
-            // 3. Análise Avançada de Imagem por IA (Opcional - Ativo se houver GEMINI_API_KEY)
+            // 4. Análise Avançada de Imagem por IA (Opcional - Ativo se houver GEMINI_API_KEY)
             if (!contemSpam && msg.hasMedia && process.env.GEMINI_API_KEY) {
               try {
                 const media = await msg.downloadMedia();
@@ -743,7 +790,7 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
                 console.error('❌ Falha ao enfileirar deleção de mensagem:', err.message);
               }
 
-              // Evita concorrência e spam do próprio bot: se o usuário já está no processo de banimento, ignora outras mensagens dele
+              // Evita concorrência e spam do próprio bot
               if (usuariosSendoRemovidos.has(participanteId)) {
                 return;
               }
@@ -753,22 +800,30 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
               const ultimoAviso = ultimosAvisosEnviados[participanteId] || 0;
               if (agoraTime - ultimoAviso < 3000) {
                 console.log(`⏳ [SaaS Moderador] Evitando aviso/advertência duplicada em lote para ${participanteId}.`);
-                return; // Apenas apaga a mídia silenciosamente sem gerar flood de mensagens do bot
+                return;
               }
               ultimosAvisosEnviados[participanteId] = agoraTime;
 
               // 2. Registra advertência de forma persistente
               const advCount = await database.registrarAdvertencia(usuarioId, groupId, participanteId);
               const contato = await msg.getContact();
+              const nomeMembro = contato ? (contato.name || contato.pushname || participanteId.split('@')[0]) : 'Membro';
+
+              // Notifica o painel em tempo real sobre o log de moderação via Websocket
+              io.to(usuarioId).emit('log_seguranca', {
+                timestamp: dayjs().format('HH:mm:ss'),
+                grupo: nomeGrupo,
+                membro: participanteId.replace('@c.us', ''),
+                nome: nomeMembro,
+                motivo: motivoSpam,
+                acao: advCount >= 3 ? 'BAN' : 'DELETE'
+              });
 
               // 3. Executa a punição correspondente
               if (advCount >= 3) {
                 usuariosSendoRemovidos.add(participanteId);
-                // Remove do Set de remoção após 7 segundos para limpar cache
                 setTimeout(() => usuariosSendoRemovidos.delete(participanteId), 7000);
 
-                // Aguarda 2.2 segundos para garantir que todas as mensagens da fila de exclusão serializada
-                // sejam apagadas com sucesso ANTES de efetuar o banimento do usuário.
                 setTimeout(async () => {
                   try {
                     await chat.removeParticipants([participanteId]);
@@ -783,8 +838,6 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
                   }
                 }, 2200);
               } else {
-                // Aguarda 2.0 segundos para garantir que todas as mídias encaminhadas na fila sequencial
-                // já tenham sido apagadas com sucesso do grupo ANTES de enviar o aviso.
                 setTimeout(async () => {
                   try {
                     await chat.sendMessage(`⚠️ @${contato.id.user}, conteúdos proibidos (Conforme Regras do Grupo) não são permitidos! Advertência (${advCount}/3). A sua mensagem foi apagada.`, { mentions: [contato] });
@@ -991,6 +1044,74 @@ app.post('/api/ban', async (req, res) => {
     res.json({ success: true, message: 'Membro removido com sucesso do grupo!' });
   } catch (err) {
     console.error('❌ Erro ao banir membro manualmente:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Rota para zerar/perdoar advertências
+app.post('/api/warnings/reset', async (req, res) => {
+  const { usuarioId, groupId, numero } = req.body;
+  if (!usuarioId || !groupId || !numero) {
+    return res.status(400).json({ error: 'Todos os campos são obrigatórios!' });
+  }
+
+  try {
+    const participanteId = numero.includes('@') ? numero : `${numero}@c.us`;
+    await database.zerarAdvertencias(usuarioId, groupId, participanteId);
+    res.json({ success: true, message: 'Advertências zeradas com sucesso!' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Rota para salvar termos proibidos do grupo
+app.post('/api/groups/:groupId/keywords', async (req, res) => {
+  const { groupId } = req.params;
+  const { usuarioId, termos } = req.body;
+  if (!usuarioId || !termos) {
+    return res.status(400).json({ error: 'ID do usuário e termos são obrigatórios!' });
+  }
+
+  try {
+    await database.salvarTermosProibidos(usuarioId, groupId, termos);
+    res.json({ success: true, message: 'Termos proibidos atualizados com sucesso!' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Rota para salvar links permitidos (whitelist) do grupo
+app.post('/api/groups/:groupId/links', async (req, res) => {
+  const { groupId } = req.params;
+  const { usuarioId, links } = req.body;
+  if (!usuarioId || !links) {
+    return res.status(400).json({ error: 'ID do usuário e links são obrigatórios!' });
+  }
+
+  try {
+    await database.salvarLinksPermitidos(usuarioId, groupId, links);
+    res.json({ success: true, message: 'Whitelist de links atualizada com sucesso!' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Rota para testar a imagem na IA (Gemini Vision Tester)
+app.post('/api/ia/test', async (req, res) => {
+  const { base64Data, mimeType } = req.body;
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    return res.status(400).json({ error: 'Chave API do Gemini não configurada no servidor!' });
+  }
+  if (!base64Data || !mimeType) {
+    return res.status(400).json({ error: 'Dados da imagem e tipo mime são obrigatórios!' });
+  }
+
+  try {
+    const resultado = await analisarImagemComIA(base64Data, mimeType, apiKey);
+    res.json({ success: true, resultado });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
