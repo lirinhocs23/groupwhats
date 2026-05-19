@@ -276,6 +276,47 @@ async function deletarMensagemComFila(msg) {
 }
 
 /**
+ * Normaliza um texto para fins de filtragem:
+ * 1. Remove acentos e diacríticos.
+ * 2. Substitui caracteres comuns de leetspeak (ex: @, 1, 0, !, etc.).
+ * 3. Remove caracteres não alfanuméricos (mantendo letras, números e espaços simples).
+ * 4. Converte para caixa baixa (lowercase).
+ */
+function normalizarTextoParaFiltro(texto) {
+  if (!texto) return '';
+  
+  let textoNormalizado = texto.toLowerCase();
+  
+  // Normaliza acentuações Unicode
+  textoNormalizado = textoNormalizado.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  
+  // Substitui leetspeak comum
+  const leetMap = {
+    '@': 'a',
+    '4': 'a',
+    '1': 'i',
+    '!': 'i',
+    '|': 'i',
+    '0': 'o',
+    '3': 'e',
+    '5': 's',
+    '$': 's'
+  };
+  
+  for (const [leet, normal] of Object.entries(leetMap)) {
+    textoNormalizado = textoNormalizado.replaceAll(leet, normal);
+  }
+  
+  // Remove emojis, asteriscos, hifens, pontos e caracteres especiais, mantendo apenas letras, números e espaços
+  textoNormalizado = textoNormalizado.replace(/[^a-z0-9\s]/g, '');
+  
+  // Substitui múltiplos espaços por um espaço simples e apara as pontas
+  textoNormalizado = textoNormalizado.replace(/\s+/g, ' ').trim();
+  
+  return textoNormalizado;
+}
+
+/**
  * Processamento interno para salvar logs de mensagens recebidas/criadas
  */
 async function processarMensagemEntrada(usuarioId, client, msg) {
@@ -633,73 +674,101 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             await new Promise(resolve => setTimeout(resolve, 500));
           }
 
-          const corpoMinusculo = corpo.toLowerCase();
+          const corpoNormalizado = normalizarTextoParaFiltro(corpo);
+          let contemSpam = false;
+          let motivoSpam = 'anúncio ou conteúdo proibido';
 
-          // Exceção Cultural: Como estamos no grupo da estação, liberamos termos e negociações da tradição de espadas
-          const isTradicaoEspada = 
-            corpoMinusculo.includes('espada') || 
-            corpoMinusculo.includes('espadas') ||
-            corpoMinusculo.includes('polvora') ||
-            corpoMinusculo.includes('pólvora') ||
-            corpoMinusculo.includes('barro') ||
-            corpoMinusculo.includes('bambivis') ||
-            corpoMinusculo.includes('prensa') ||
-            corpoMinusculo.includes('bambu') ||
-            corpoMinusculo.includes('fogueira') ||
-            corpoMinusculo.includes('corda') ||
-            corpoMinusculo.includes('pilao') ||
-            corpoMinusculo.includes('pilão') ||
-            corpoMinusculo.includes('cilindro');
+          // Busca as configurações customizadas do grupo se existirem no banco de dados local
+          const db = await database.lerDB();
+          const grupoConfig = db.atividade[usuarioId] && db.atividade[usuarioId][groupId];
+          const termosCustomizados = (grupoConfig && grupoConfig.termosProibidos && grupoConfig.termosProibidos.length > 0)
+            ? grupoConfig.termosProibidos
+            : null;
 
-          if (!isTradicaoEspada) {
-            // Busca as configurações customizadas do grupo se existirem no banco de dados local
-            const db = await database.lerDB();
-            const grupoConfig = db.atividade[usuarioId] && db.atividade[usuarioId][groupId];
+          // 1. Filtro de Termos Proibidos Absolutos (Sempre bloqueados)
+          const termosAbsolutos = [
+            // Apostas, Cassinos e Jogos de Azar
+            'aposta', 'bets', 'betano', 'blaze', 'cassino', 'casino', 'roleta', 'slots', 
+            'tigrinho', 'fortune tiger', 'fortune ox', 'fortune rabbit', 'sorte online',
+            'link de aposta', 'aposta ganhadora', 'previsao de jogo', 'esporte bets',
             
-            // 1. Termos Proibidos (Customizados ou Padrão)
-            let listaTermos = (grupoConfig && grupoConfig.termosProibidos && grupoConfig.termosProibidos.length > 0)
-              ? grupoConfig.termosProibidos
-              : [
-                  // Apostas, Cassinos e Jogos de Azar
-                  'aposta', 'bets', 'betano', 'blaze', 'cassino', 'casino', 'roleta', 'slots', 
-                  'tigrinho', 'fortune tiger', 'fortune ox', 'fortune rabbit', 'sorte online',
-                  'link de aposta', 'aposta ganhadora', 'previsão de jogo', 'esporte bets',
-                  
-                  // Plataformas de Ganhos Suspeitos / Renda Extra
-                  'plataforma pagando', 'ganhos suspeitos', 'renda extra', 'ganhe dinheiro', 
-                  'trabalhe em casa', 'ganho garantido', 'investimento garantido', 'robô do pix',
-                  'robo do pix', 'oportunidade única', 'oportunidade unica', 'renda fácil', 
-                  'renda facil', 'dinheiro rápido', 'dinheiro rapido',
-                  
-                  // Spam, Anúncios e Correntes
-                  'repasse para', 'compartilhe com', 'se você não enviar', 'mensagem de sorte', 
-                  'corrente', 'chama no pv', 'chama no zap', 'chama pv', 'chama no inbox',
-                  'compre', 'vendo', 'vende-se', 'oportunidade de emprego', 'trabalhe',
-                  
-                  // Termos de Rifeiro / Rifa
-                  'rifa', 'rifas', 'rifeiro', 'rifeiros', 'bilhete', 'bilhetes', 'sorteio', 
-                  'sorteios', 'cota', 'cotas', 'ação entre amigos', 'acao entre amigos', 
-                  'rifa online', 'adquira seu bilhete', 'adquira sua cota', 'compra de cota', 
-                  'comprar cota', 'tabela de rifa', 'tabela de rifas',
-                  
-                  // Termos de Tragédia / Acidentes
-                  'acidente', 'acidentes', 'colisão', 'colisao', 'capotou', 'capotamento', 'baleado', 
-                  'baleados', 'assassinato', 'homicídio', 'homicidio', 'óbito', 'obito', 'vítima', 
-                  'vitima', 'vítimas', 'vitimas', 'morreu', 'faleceu', 'corpo', 'necrotério', 
-                  'tragédia', 'tragedia', 'grave acidente'
-                ];
+            // Plataformas de Ganhos Suspeitos / Renda Extra
+            'plataforma pagando', 'ganhos suspeitos', 'renda extra', 'ganhe dinheiro', 
+            'ganho garantido', 'investimento garantido', 'robo do pix',
+            'oportunidade unica', 'renda facil', 'dinheiro rapido',
+            
+            // Spam e Correntes
+            'repasse para', 'compartilhe com', 'se voce nao enviar', 'mensagem de sorte', 
+            'corrente',
+            
+            // Termos de Tragédia / Acidentes (Segurança)
+            'acidente', 'acidentes', 'colisao', 'capotou', 'capotamento', 'baleado', 
+            'baleados', 'assassinato', 'homicidio', 'obito', 'vitima', 'vitimas', 
+            'morreu', 'faleceu', 'corpo', 'necroterio', 'tragedia', 'grave acidente'
+          ];
 
-            let contemSpam = false;
-            let motivoSpam = 'anúncio ou conteúdo proibido';
+          for (const termo of termosAbsolutos) {
+            const regex = new RegExp('\\b' + termo + '\\b', 'i');
+            if (regex.test(corpoNormalizado)) {
+              contemSpam = true;
+              motivoSpam = `uso de termo proibido absoluto ("${termo}")`;
+              break;
+            }
+          }
 
-            // Verifica termos proibidos no texto/legenda
-            for (const termo of listaTermos) {
-              if (corpoMinusculo.includes(termo.toLowerCase().trim())) {
-                contemSpam = true;
-                motivoSpam = `uso de termo proibido ("${termo}")`;
+          // 2. Se houver termos customizados cadastrados no painel, bloqueamos como proibição absoluta
+          if (!contemSpam && termosCustomizados) {
+            for (const termo of termosCustomizados) {
+              const termoNormalizado = normalizarTextoParaFiltro(termo);
+              if (termoNormalizado) {
+                const regex = new RegExp('\\b' + termoNormalizado + '\\b', 'i');
+                if (regex.test(corpoNormalizado)) {
+                  contemSpam = true;
+                  motivoSpam = `uso de termo proibido personalizado ("${termo}")`;
+                  break;
+                }
+              }
+            }
+          }
+
+          // 3. Filtro de Termos Comerciais e Rifas Condicionais (Bloqueia apenas se não contiver termos da tradição de espadas)
+          if (!contemSpam && !termosCustomizados) {
+            const termosTradicao = [
+              'espada', 'espadas', 'polvora', 'barro', 'bambivis', 'prensa', 'bambu', 
+              'fogueira', 'corda', 'pilao', 'cilindro'
+            ];
+            
+            const termosCondicionais = [
+              'vendo', 'vende se', 'compre', 'comprar', 'compra', 'chama no pv', 'chama pv', 'chama no zap', 
+              'valor', 'interessados', 'rifa', 'rifas', 'sorteio', 'sorteios', 'cota', 'cotas', 
+              'acao entre amigos', 'bilhete', 'bilhetes', 'oportunidade de emprego', 'trabalhe'
+            ];
+
+            let contemTermoComercial = false;
+            let termoComercialDetetado = '';
+
+            for (const termo of termosCondicionais) {
+              const regex = new RegExp('\\b' + termo + '\\b', 'i');
+              if (regex.test(corpoNormalizado)) {
+                contemTermoComercial = true;
+                termoComercialDetetado = termo;
                 break;
               }
             }
+
+            if (contemTermoComercial) {
+              // Verifica se há pelo menos um termo da tradição na mensagem para liberar
+              const temContextoTradicao = termosTradicao.some(termoT => {
+                const regex = new RegExp('\\b' + termoT + '\\b', 'i');
+                return regex.test(corpoNormalizado);
+              });
+
+              if (!temContextoTradicao) {
+                contemSpam = true;
+                motivoSpam = `termo comercial/rifa ("${termoComercialDetetado}") fora do contexto da Tradição de Espadas`;
+              }
+            }
+          }
 
             // 2. Filtro de Links Inteligente (Anti-Link)
             if (!contemSpam) {
@@ -855,7 +924,6 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
 
               return; // Interrompe para não salvar nas estatísticas gerais
             }
-        }
       }
     }
 
