@@ -385,10 +385,11 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
         }
       }
 
+      const corpo = msg.body || '';
+      console.log(`📥 [RECEBIDA] Grupo: "${nomeGrupo}", Membro: ${participanteId}, fromMe: ${msg.fromMe}, hasMedia: ${msg.hasMedia}, texto: "${corpo.substring(0, 50)}"`);
+
       // Ignora mensagens do próprio bot
       if (participanteId === client.info.wid._serialized) return;
-
-      const corpo = msg.body || '';
 
       // ─── COMANDOS DO BOT MULTI-TENANT (SaaS) ───
       if (corpo.startsWith('/')) {
