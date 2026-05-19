@@ -228,15 +228,18 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
 
     if (mimeType.startsWith('video/')) {
       // Vídeos precisam ser enviados via File API do Google
+      const buffer = Buffer.from(base64Data, 'base64');
       const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
       const uploadRes = await fetch(uploadUrl, {
         method: 'POST',
         headers: {
           'Content-Type': mimeType,
           'X-Goog-Upload-Protocol': 'raw',
-          'X-Goog-Upload-Command': 'upload, finalize'
+          'X-Goog-Upload-Command': 'upload, finalize',
+          'X-Goog-Upload-Header-Content-Type': mimeType,
+          'X-Goog-Upload-Header-Content-Length': buffer.length.toString()
         },
-        body: Buffer.from(base64Data, 'base64')
+        body: buffer
       });
 
       if (!uploadRes.ok) {
@@ -275,14 +278,15 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
       contents: [{
         parts: [
           {
-            text: "Analise esta imagem ou vídeo enviado em um grupo de chat de entusiastas de fogos de artifício tradicionais. Ela se enquadra em alguma destas categorias proibidas:\n" +
-              "1. ACIDENTES REAIS E VIOLÊNCIA: Cenas de acidentes de trânsito (capotamento, colisões), mortes, agressões físicas reais, brigas de rua, mutilações ou sangue exposto.\n" +
-              "2. SPAM DE APOSTAS/GOLPES: Panfletos, prints ou banners promovendo jogos de azar, cassinos online, apostas esportivas, robô do pix ou plataformas de ganhos rápidos.\n" +
-              "3. PROPAGANDAS FORA DE CONTEXTO: Panfletos de venda de produtos comuns alheios à Tradição de Espadas/fogos (como rifas de carros/celulares comuns ou anúncios comerciais).\n\n" +
-              "⚠️ REGRAS DE LIBERAÇÃO (CULTURA JUNINA & FESTAS):\n" +
-              "- Fotos e vídeos de pessoas acendendo, fabricando ou correndo com espadas de fogo artesanais (tradicional 'guerra de espadas'), faíscas festivas, fumaça festiva, fogueiras, pólvora, prensas de barro, ou cilindros são PERMITIDOS (NAO). Não confunda faíscas com incêndios.\n" +
-              "- Cartazes de programações de festas locais e shows juninos são PERMITIDOS (NAO).\n\n" +
-              "Responda estritamente apenas com a palavra SIM se contiver conteúdo proibido, ou NAO se for permitido/seguro."
+            text: "Você é um moderador rigoroso de um grupo de WhatsApp focado APENAS em cultura de fogos e espadas juninas.\n" +
+              "Assista ao vídeo ou veja esta imagem. Se houver QUALQUER UMA das coisas abaixo, responda SIM.\n\n" +
+              "1. ACIDENTES E CARROS BATIDOS: Qualquer cena mostrando um carro batido, acidente de trânsito, colisão, capotamento, viaturas de resgate, pessoas feridas ou mortas nas ruas.\n" +
+              "2. SPAM DE APOSTAS/GOLPES: Panfletos promovendo jogos de azar, cassinos, apostas esportivas, robô do pix, etc.\n" +
+              "3. PROPAGANDAS: Venda de carros, motos, rifas ou itens normais.\n\n" +
+              "⚠️ REGRAS DE LIBERAÇÃO (EXCEÇÕES):\n" +
+              "- Se o vídeo mostrar apenas pessoas soltando fogos de artifício (espadas de fogo artesanais), fogueiras, faíscas festivas e NÃO tiver carros batidos nem acidentes, você DEVE responder NAO.\n" +
+              "- Cartazes de programações de festas locais e shows juninos também respondem NAO.\n\n" +
+              "Responda ESTRITAMENTE apenas com a palavra SIM se tiver conteúdo proibido (como carro batido/acidente/apostas), ou NAO se for apenas fogos/fogueira ou seguro."
           },
           payloadPart
         ]
