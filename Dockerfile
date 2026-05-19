@@ -1,8 +1,9 @@
 FROM node:20-slim
 
-# Instala o Chromium e todas as dependências do sistema necessárias para o Puppeteer rodar no Linux headless
+# Instala o Chromium e todas as dependências do sistema necessárias para o Puppeteer rodar no Linux headless, além do FFmpeg para vídeos
 RUN apt-get update && apt-get install -y \
     chromium \
+    ffmpeg \
     fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf libxss1 \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*

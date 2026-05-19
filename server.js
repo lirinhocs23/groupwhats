@@ -8,6 +8,9 @@ const fs = require('fs-extra');
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const database = require('./database');
 const dayjs = require('dayjs');
+const ffmpeg = require('fluent-ffmpeg');
+const os = require('os');
+const crypto = require('crypto');
 
 // Buffer de logs na memória para depuração remota rápida do SaaS
 const debugLogs = [];
@@ -227,61 +230,40 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
     let payloadPart;
 
     if (mimeType.startsWith('video/')) {
-      // Vídeos precisam ser enviados via File API do Google
+      console.log(`⏳ [Moderador IA] Vídeo detectado. Extraindo o frame central com FFmpeg para análise ultra-rápida...`);
       const buffer = Buffer.from(base64Data, 'base64');
-      const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
-      const uploadRes = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': mimeType,
-          'X-Goog-Upload-Protocol': 'raw',
-          'X-Goog-Upload-Command': 'upload, finalize',
-          'X-Goog-Upload-Header-Content-Type': mimeType,
-          'X-Goog-Upload-Header-Content-Length': buffer.length.toString()
-        },
-        body: buffer
-      });
+      const tmpDir = os.tmpdir();
+      const id = crypto.randomUUID();
+      const videoPath = path.join(tmpDir, `${id}.mp4`);
+      const framePath = path.join(tmpDir, `${id}.jpg`);
 
-      if (!uploadRes.ok) {
-        console.warn(`⚠️ Erro ao fazer upload do vídeo pro Gemini: ${uploadRes.status}`);
-        return 'NAO'; // Libera em caso de erro na nuvem
-      }
-
-      const fileInfo = await uploadRes.json();
-      const fileUri = fileInfo.file.uri;
-      const fileName = fileInfo.file.name;
-
-      // Esperar o vídeo ser processado (estado ACTIVE)
-      let isActive = fileInfo.file.state === 'ACTIVE';
-      let attempts = 0;
-      
-      if (!isActive) {
-        console.log(`⏳ [Moderador IA] Vídeo enviado para nuvem. Aguardando processamento... (Pode levar até 30s)`);
-      }
-
-      while (!isActive && attempts < 15) {
-        await new Promise(r => setTimeout(r, 2000)); // Aguarda 2 segundos
-        const checkRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`);
-        const checkData = await checkRes.json();
+      try {
+        fs.writeFileSync(videoPath, buffer);
         
-        if (checkData.state === 'ACTIVE') {
-          isActive = true;
-          console.log(`✅ [Moderador IA] Vídeo processado na nuvem! Analisando frames...`);
-        } else if (checkData.state === 'FAILED') {
-          throw new Error('Falha no processamento do vídeo pelo Gemini.');
-        } else {
-          console.log(`⏳ [Moderador IA] Ainda processando vídeo... (Tentativa ${attempts + 1}/15)`);
-        }
-        attempts++;
+        await new Promise((resolve, reject) => {
+          ffmpeg(videoPath)
+            .screenshots({
+              timestamps: ['50%'], // Extrai a imagem exatamente do meio do vídeo
+              filename: `${id}.jpg`,
+              folder: tmpDir
+            })
+            .on('end', resolve)
+            .on('error', err => {
+              console.error(`⚠️ FFmpeg falhou ao extrair frame:`, err.message);
+              reject(err);
+            });
+        });
+        
+        console.log(`✅ [Moderador IA] Frame extraído! Enviando a foto estática para o Gemini Flash...`);
+        const frameBuffer = fs.readFileSync(framePath);
+        payloadPart = {
+          inlineData: { mimeType: 'image/jpeg', data: frameBuffer.toString('base64') }
+        };
+      } finally {
+        // Garantir que os arquivos pesados são limpos do servidor para não estourar disco
+        if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
+        if (fs.existsSync(framePath)) fs.unlinkSync(framePath);
       }
-
-      if (!isActive) {
-        throw new Error('Tempo limite excedido aguardando o Google processar o vídeo.');
-      }
-
-      payloadPart = {
-        fileData: { mimeType: mimeType, fileUri: fileUri }
-      };
     } else {
       // Imagens podem ir via inlineData rapidamente
       payloadPart = {
