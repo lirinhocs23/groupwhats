@@ -689,16 +689,16 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
 
             // 2. Heurística Inteligente para Mídias Encaminhadas (Com redobrada resiliência)
             if (!contemSpam && msg.hasMedia) {
-              let isForwarded = msg.isForwarded || msg._data?.isForwarded;
-              let score = msg.forwardingScore || msg._data?.forwardingScore || 0;
+              let isForwarded = msg.isForwarded || msg._data?.isForwarded || msg._data?.contextInfo?.isForwarded;
+              let score = msg.forwardingScore || msg._data?.forwardingScore || msg._data?.contextInfo?.forwardingScore || 0;
 
               // Se não estiver marcado como encaminhado ainda, tenta verificar novamente em loops curtos
               // Isso resolve 100% dos atrasos de download de metadados do WhatsApp Web sob conexões lentas ou congestionadas
               if (!isForwarded) {
-                for (let tentativa = 0; tentativa < 4; tentativa++) {
+                for (let tentativa = 0; tentativa < 6; tentativa++) {
                   await new Promise(resolve => setTimeout(resolve, 300));
-                  isForwarded = msg.isForwarded || msg._data?.isForwarded;
-                  score = msg.forwardingScore || msg._data?.forwardingScore || 0;
+                  isForwarded = msg.isForwarded || msg._data?.isForwarded || msg._data?.contextInfo?.isForwarded;
+                  score = msg.forwardingScore || msg._data?.forwardingScore || msg._data?.contextInfo?.forwardingScore || 0;
                   if (isForwarded) {
                     console.log(`⚡ [SaaS Moderador] Metadado de encaminhamento carregado com sucesso na tentativa ${tentativa + 1}.`);
                     break;
