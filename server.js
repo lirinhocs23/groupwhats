@@ -865,24 +865,64 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
           if (!contemSpam && msg.hasMedia && process.env.GEMINI_API_KEY) {
             try {
               const media = await msg.downloadMedia();
-              if (media && (media.mimetype.startsWith('image/') || media.mimetype.startsWith('video/'))) {
-                // Estima o tamanho a partir do base64 (3/4 do comprimento da string base64)
-                const tamanhoMB = (media.data.length * 0.75) / (1024 * 1024);
-                
-                if (tamanhoMB > 10) {
-                  console.log(`⚠️ [Moderador IA] Mídia de ${participanteId} ignorada por tamanho excessivo (${tamanhoMB.toFixed(2)}MB > 10MB)`);
-                } else {
-                  const tipoMidia = media.mimetype.startsWith('image/') ? 'imagem' : 'vídeo';
-                  console.log(`🤖 [Moderador IA] Analisando ${tipoMidia} de ${participanteId} (${tamanhoMB.toFixed(2)}MB) com Gemini Vision...`);
-                  const resultadoIA = await analisarImagemComIA(media.data, media.mimetype, process.env.GEMINI_API_KEY);
-                  if (resultadoIA === 'SIM') {
-                    contemSpam = true;
-                    motivoSpam = `conteúdo visual impróprio detectado por Inteligência Artificial no ${tipoMidia}`;
+              if (media) {
+                if (media.mimetype.startsWith('image/') || media.mimetype.startsWith('video/')) {
+                  // Estima o tamanho a partir do base64 (3/4 do comprimento da string base64)
+                  const tamanhoMB = (media.data.length * 0.75) / (1024 * 1024);
+                  
+                  if (tamanhoMB > 10) {
+                    console.log(`⚠️ [Moderador IA] Mídia de ${participanteId} ignorada por tamanho excessivo (${tamanhoMB.toFixed(2)}MB > 10MB)`);
+                    io.to(usuarioId).emit('log_seguranca', {
+                      data: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+                      grupo: nomeGrupo,
+                      membro: participanteId.split('@')[0],
+                      nome: msg._data.notifyName || 'Membro',
+                      acao: 'ALLOW',
+                      motivo: `Mídia (${media.mimetype.startsWith('image/') ? 'imagem' : 'vídeo'}) ignorada por tamanho excessivo (${tamanhoMB.toFixed(2)}MB > 10MB)`
+                    });
+                  } else {
+                    const tipoMidia = media.mimetype.startsWith('image/') ? 'imagem' : 'vídeo';
+                    console.log(`🤖 [Moderador IA] Analisando ${tipoMidia} de ${participanteId} (${tamanhoMB.toFixed(2)}MB) com Gemini Vision...`);
+                    
+                    const resultadoIA = await analisarImagemComIA(media.data, media.mimetype, process.env.GEMINI_API_KEY);
+                    
+                    if (resultadoIA === 'SIM') {
+                      contemSpam = true;
+                      motivoSpam = `conteúdo visual impróprio detectado por Inteligência Artificial no ${tipoMidia}`;
+                    } else {
+                      // Log de sucesso/liberação da IA
+                      io.to(usuarioId).emit('log_seguranca', {
+                        data: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+                        grupo: nomeGrupo,
+                        membro: participanteId.split('@')[0],
+                        nome: msg._data.notifyName || 'Membro',
+                        acao: 'ALLOW',
+                        motivo: `${tipoMidia.charAt(0).toUpperCase() + tipoMidia.slice(1)} de ${tamanhoMB.toFixed(2)}MB analisado e LIBERADO pela IA`
+                      });
+                    }
                   }
                 }
+              } else {
+                console.log(`⚠️ [Moderador IA] Falha ao baixar mídia de ${participanteId}: downloadMedia retornou vazio.`);
+                io.to(usuarioId).emit('log_seguranca', {
+                  data: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+                  grupo: nomeGrupo,
+                  membro: participanteId.split('@')[0],
+                  nome: msg._data.notifyName || 'Membro',
+                  acao: 'ALLOW',
+                  motivo: `Mídia ignorada: Falha ao baixar arquivo (WhatsApp retornou vazio)`
+                });
               }
             } catch (err) {
               console.error('⚠️ Falha ao baixar ou analisar mídia com IA:', err.message);
+              io.to(usuarioId).emit('log_seguranca', {
+                data: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+                grupo: nomeGrupo,
+                membro: participanteId.split('@')[0],
+                nome: msg._data.notifyName || 'Membro',
+                acao: 'ALLOW',
+                motivo: `Mídia ignorada: Erro no download/análise IA (${err.message})`
+              });
             }
           }
 
