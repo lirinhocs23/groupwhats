@@ -229,15 +229,13 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
   try {
     const parts = [
       {
-        text: "Você é um moderador rigoroso de um grupo de WhatsApp focado APENAS em cultura de fogos e espadas juninas.\n" +
-          "Assista aos frames do vídeo ou veja esta imagem. Se houver QUALQUER UMA das coisas abaixo, responda SIM.\n\n" +
-          "1. ACIDENTES E CARROS BATIDOS: Qualquer cena mostrando um carro batido, acidente de trânsito, colisão, capotamento, viaturas de resgate, pessoas feridas ou mortas nas ruas.\n" +
-          "2. SPAM DE APOSTAS/GOLPES: Panfletos promovendo jogos de azar, cassinos, apostas esportivas, robô do pix, etc.\n" +
-          "3. PROPAGANDAS: Venda de carros, motos, rifas ou itens normais.\n\n" +
-          "⚠️ REGRAS DE LIBERAÇÃO (EXCEÇÕES):\n" +
-          "- Se mostrar apenas pessoas soltando fogos de artifício (espadas de fogo artesanais), fogueiras, faíscas festivas e NÃO tiver carros batidos nem acidentes, você DEVE responder NAO.\n" +
-          "- Cartazes de programações de festas locais e shows juninos também respondem NAO.\n\n" +
-          "Responda ESTRITAMENTE apenas com a palavra SIM se tiver conteúdo proibido (como carro batido/acidente/apostas), ou NAO se for apenas fogos/fogueira ou seguro."
+        text: "Você é um moderador rigoroso de grupo de WhatsApp.\n" +
+          "Analise os frames do vídeo ou a imagem enviada. Você DEVE responder SIM se houver:\n\n" +
+          "1. ACIDENTES OU CARROS BATIDOS: Qualquer colisão de trânsito, carro amassado/batido, capotamento, atropelamento, viaturas de resgate ou pessoas acidentadas.\n" +
+          "2. JOGOS DE AZAR / APOSTAS: Panfletos de cassino, robô do pix, apostas esportivas ou promessas de dinheiro fácil.\n" +
+          "3. PROPAGANDAS E VENDAS: Anúncios de venda de carros, motos, rifas ou propagandas comerciais de itens comuns.\n\n" +
+          "Caso contrário (se a imagem/vídeo for sobre pessoas soltando fogos de artifício/espadas juninas, fogueiras, cartazes de festas juninas ou conversas normais), responda NAO.\n\n" +
+          "Responda ESTRITAMENTE com a palavra SIM ou NAO. Não escreva mais nada."
       }
     ];
 
