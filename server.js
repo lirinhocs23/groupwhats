@@ -211,11 +211,13 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
         {
           parts: [
             {
-              text: "Analise esta imagem enviada em um grupo de chat. Ela se enquadra em alguma destas categorias proibidas:\n" +
-                "1. Cenas de acidentes de trânsito, capotamento, carros destruídos, tragédias, violência física, sangue, mutilação ou conteúdo chocante/gore.\n" +
-                "2. Anúncios, prints, panfletos ou banners promovendo jogos de azar, cassinos online, apostas esportivas, robô do pix, plataformas de ganhos rápidos (como Fortune Tiger/Tigrinho, Blaze, Betano).\n" +
-                "3. Panfletos de venda de produtos alheios à Tradição de Espadas/fogos de artifício (como rifas de carros/celulares ou propagandas de outros negócios comuns).\n\n" +
-                "Nota: Fotos de espadas artesanais de fogo, pólvora, bambus, prensa de barro ou fogueiras são PERMITIDAS e não devem ser bloqueadas.\n" +
+              text: "Analise esta imagem ou vídeo enviado em um grupo de chat de entusiastas de fogos de artifício tradicionais. Ela se enquadra em alguma destas categorias proibidas:\n" +
+                "1. ACIDENTES REAIS E VIOLÊNCIA: Cenas de acidentes de trânsito (capotamento, colisões), mortes, agressões físicas reais, brigas de rua, mutilações ou sangue exposto.\n" +
+                "2. SPAM DE APOSTAS/GOLPES: Panfletos, prints ou banners promovendo jogos de azar, cassinos online, apostas esportivas, robô do pix ou plataformas de ganhos rápidos (como Fortune Tiger/Tigrinho, Blaze, Betano).\n" +
+                "3. PROPAGANDAS FORA DE CONTEXTO: Panfletos de venda de produtos comuns alheios à Tradição de Espadas/fogos (como rifas de carros/celulares comuns ou anúncios comerciais de lojas normais).\n\n" +
+                "⚠️ REGRAS DE LIBERAÇÃO (CULTURA JUNINA & FESTAS):\n" +
+                "- Fotos e vídeos de pessoas acendendo, fabricando ou correndo com espadas de fogo artesanais (tradicional 'guerra de espadas' junina), faíscas festivas, fumaça festiva, fogueiras de São João, pólvora, prensas de barro, bambus ou cilindros são PERMITIDOS (NAO). Não confunda faíscas de espadas e fumaça junina com tragédias ou incêndios.\n" +
+                "- Imagens com cartazes de programações de festas locais, grades de shows juninos ou eventos da comunidade são PERMITIDOS (NAO).\n\n" +
                 "Responda estritamente apenas com a palavra SIM se contiver conteúdo proibido, ou NAO se for permitido/seguro."
             },
             {
@@ -859,16 +861,24 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             }
           }
 
-          // 4. Análise Avançada de Imagem por IA (Opcional - Ativo se houver GEMINI_API_KEY)
+          // 4. Análise Avançada de Imagem e Vídeo por IA (Opcional - Ativo se houver GEMINI_API_KEY)
           if (!contemSpam && msg.hasMedia && process.env.GEMINI_API_KEY) {
             try {
               const media = await msg.downloadMedia();
-              if (media && media.mimetype.startsWith('image/')) {
-                console.log(`🤖 [Moderador IA] Analisando imagem de ${participanteId} com Gemini Vision...`);
-                const resultadoIA = await analisarImagemComIA(media.data, media.mimetype, process.env.GEMINI_API_KEY);
-                if (resultadoIA === 'SIM') {
-                  contemSpam = true;
-                  motivoSpam = 'conteúdo visual impróprio detectado por Inteligência Artificial (cena de acidente/tragédia)';
+              if (media && (media.mimetype.startsWith('image/') || media.mimetype.startsWith('video/'))) {
+                // Estima o tamanho a partir do base64 (3/4 do comprimento da string base64)
+                const tamanhoMB = (media.data.length * 0.75) / (1024 * 1024);
+                
+                if (tamanhoMB > 10) {
+                  console.log(`⚠️ [Moderador IA] Mídia de ${participanteId} ignorada por tamanho excessivo (${tamanhoMB.toFixed(2)}MB > 10MB)`);
+                } else {
+                  const tipoMidia = media.mimetype.startsWith('image/') ? 'imagem' : 'vídeo';
+                  console.log(`🤖 [Moderador IA] Analisando ${tipoMidia} de ${participanteId} (${tamanhoMB.toFixed(2)}MB) com Gemini Vision...`);
+                  const resultadoIA = await analisarImagemComIA(media.data, media.mimetype, process.env.GEMINI_API_KEY);
+                  if (resultadoIA === 'SIM') {
+                    contemSpam = true;
+                    motivoSpam = `conteúdo visual impróprio detectado por Inteligência Artificial no ${tipoMidia}`;
+                  }
                 }
               }
             } catch (err) {
