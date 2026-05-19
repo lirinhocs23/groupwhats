@@ -220,34 +220,73 @@ async function encerrarSessao(usuarioId, forcarLogoff = false) {
 }
 
 /**
- * Analisa uma imagem em base64 usando a API do Gemini 1.5 Flash para detectar tragédias, acidentes ou violência.
+ * Analisa uma imagem ou vídeo em base64 usando a API do Gemini 1.5 Flash.
  */
 async function analisarImagemComIA(base64Data, mimeType, apiKey) {
   try {
+    let payloadPart;
+
+    if (mimeType.startsWith('video/')) {
+      // Vídeos precisam ser enviados via File API do Google
+      const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
+      const uploadRes = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': mimeType,
+          'X-Goog-Upload-Protocol': 'raw',
+          'X-Goog-Upload-Command': 'upload, finalize'
+        },
+        body: Buffer.from(base64Data, 'base64')
+      });
+
+      if (!uploadRes.ok) {
+        console.warn(`⚠️ Erro ao fazer upload do vídeo pro Gemini: ${uploadRes.status}`);
+        return 'NAO'; // Libera em caso de erro na nuvem
+      }
+
+      const fileInfo = await uploadRes.json();
+      const fileUri = fileInfo.file.uri;
+      const fileName = fileInfo.file.name;
+
+      // Esperar o vídeo ser processado (estado ACTIVE)
+      let isActive = fileInfo.file.state === 'ACTIVE';
+      let attempts = 0;
+      while (!isActive && attempts < 15) {
+        await new Promise(r => setTimeout(r, 2000)); // Aguarda 2 segundos
+        const checkRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`);
+        const checkData = await checkRes.json();
+        if (checkData.state === 'ACTIVE') isActive = true;
+        else if (checkData.state === 'FAILED') throw new Error('Falha no processamento do vídeo pelo Gemini.');
+        attempts++;
+      }
+
+      payloadPart = {
+        fileData: { mimeType: mimeType, fileUri: fileUri }
+      };
+    } else {
+      // Imagens podem ir via inlineData rapidamente
+      payloadPart = {
+        inlineData: { mimeType: mimeType, data: base64Data }
+      };
+    }
+
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
     const payload = {
-      contents: [
-        {
-          parts: [
-            {
-              text: "Analise esta imagem ou vídeo enviado em um grupo de chat de entusiastas de fogos de artifício tradicionais. Ela se enquadra em alguma destas categorias proibidas:\n" +
-                "1. ACIDENTES REAIS E VIOLÊNCIA: Cenas de acidentes de trânsito (capotamento, colisões), mortes, agressões físicas reais, brigas de rua, mutilações ou sangue exposto.\n" +
-                "2. SPAM DE APOSTAS/GOLPES: Panfletos, prints ou banners promovendo jogos de azar, cassinos online, apostas esportivas, robô do pix ou plataformas de ganhos rápidos (como Fortune Tiger/Tigrinho, Blaze, Betano).\n" +
-                "3. PROPAGANDAS FORA DE CONTEXTO: Panfletos de venda de produtos comuns alheios à Tradição de Espadas/fogos (como rifas de carros/celulares comuns ou anúncios comerciais de lojas normais).\n\n" +
-                "⚠️ REGRAS DE LIBERAÇÃO (CULTURA JUNINA & FESTAS):\n" +
-                "- Fotos e vídeos de pessoas acendendo, fabricando ou correndo com espadas de fogo artesanais (tradicional 'guerra de espadas' junina), faíscas festivas, fumaça festiva, fogueiras de São João, pólvora, prensas de barro, bambus ou cilindros são PERMITIDOS (NAO). Não confunda faíscas de espadas e fumaça junina com tragédias ou incêndios.\n" +
-                "- Imagens com cartazes de programações de festas locais, grades de shows juninos ou eventos da comunidade são PERMITIDOS (NAO).\n\n" +
-                "Responda estritamente apenas com a palavra SIM se contiver conteúdo proibido, ou NAO se for permitido/seguro."
-            },
-            {
-              inlineData: {
-                mimeType: mimeType,
-                data: base64Data
-              }
-            }
-          ]
-        }
-      ]
+      contents: [{
+        parts: [
+          {
+            text: "Analise esta imagem ou vídeo enviado em um grupo de chat de entusiastas de fogos de artifício tradicionais. Ela se enquadra em alguma destas categorias proibidas:\n" +
+              "1. ACIDENTES REAIS E VIOLÊNCIA: Cenas de acidentes de trânsito (capotamento, colisões), mortes, agressões físicas reais, brigas de rua, mutilações ou sangue exposto.\n" +
+              "2. SPAM DE APOSTAS/GOLPES: Panfletos, prints ou banners promovendo jogos de azar, cassinos online, apostas esportivas, robô do pix ou plataformas de ganhos rápidos.\n" +
+              "3. PROPAGANDAS FORA DE CONTEXTO: Panfletos de venda de produtos comuns alheios à Tradição de Espadas/fogos (como rifas de carros/celulares comuns ou anúncios comerciais).\n\n" +
+              "⚠️ REGRAS DE LIBERAÇÃO (CULTURA JUNINA & FESTAS):\n" +
+              "- Fotos e vídeos de pessoas acendendo, fabricando ou correndo com espadas de fogo artesanais (tradicional 'guerra de espadas'), faíscas festivas, fumaça festiva, fogueiras, pólvora, prensas de barro, ou cilindros são PERMITIDOS (NAO). Não confunda faíscas com incêndios.\n" +
+              "- Cartazes de programações de festas locais e shows juninos são PERMITIDOS (NAO).\n\n" +
+              "Responda estritamente apenas com a palavra SIM se contiver conteúdo proibido, ou NAO se for permitido/seguro."
+          },
+          payloadPart
+        ]
+      }]
     };
 
     const res = await fetch(url, {
@@ -287,13 +326,13 @@ Um membro enviou a seguinte mensagem de texto:
 "${texto}"
 
 Regras do grupo:
-1. SPAM/GOLPES/COMÉRCIO: É estritamente proibido vender coisas, fazer anúncios de produtos normais, rifas genéricas ou promover jogos de aposta (Tigrinho, cassino, robô do pix).
-2. TRAGÉDIAS E VIOLÊNCIA: É estritamente proibido relatos sérios de acidentes de trânsito reais, mortes acidentais, violência ou sangue.
-3. CONVERSAS NORMAIS: Mensagens cotidianas inofensivas, uso de gírias, figuras de linguagem como "morreu de rir", "compra pão", relato de falecimento natural de familiar, SÃO TOTALMENTE PERMITIDOS.
+1. SPAM/GOLPES/COMÉRCIO: É estritamente proibido vender coisas, fazer anúncios de produtos normais, rifas (qualquer tipo de rifa de carro, celular, etc) ou promover jogos de aposta.
+2. TRAGÉDIAS E VIOLÊNCIA: É estritamente proibido relatos de acidentes de trânsito reais, mortes acidentais, ou sangue.
+3. CONVERSAS NORMAIS E GÍRIAS: Uso de figuras de linguagem inofensivas como "morreu de rir", "compra pão", relato de falecimento natural de familiar, ou conversas sobre fogos/espadas SÃO TOTALMENTE PERMITIDOS.
 
-Analise o CONTEXTO da mensagem acima.
-Responda ESTRITAMENTE apenas com a palavra SIM se a mensagem tem a clara intenção de quebrar as regras 1 ou 2.
-Responda ESTRITAMENTE apenas com a palavra NAO se a mensagem for apenas um bate-papo inofensivo usando palavras do dia a dia, mesmo que contenha palavras como "morreu", "compra", "acidente" fora de contexto malicioso.`
+Analise a INTENÇÃO da mensagem acima.
+Responda ESTRITAMENTE apenas com a palavra SIM se a mensagem tentar vender coisas, oferecer rifas, carros, produtos, ou relatar violência real (quebra das regras 1 ou 2).
+Responda ESTRITAMENTE apenas com a palavra NAO se a mensagem for apenas um bate-papo inofensivo, gíria ou figura de linguagem sem intenção comercial clara.`
             }
           ]
         }
@@ -795,6 +834,26 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             }
           }
 
+          // 1.5. Filtro de Palavrões e Ofensas Graves
+          if (!contemSpam) {
+            const termosOfensivos = [
+              'filho da puta', 'filha da puta', 'arrombado', 'arrombada', 'desgraca', 'desgraça',
+              'desgracado', 'desgraçado', 'fdp', 'vsf', 'vai se foder', 'vai tomar no cu',
+              'tomanocu', 'puta que pariu', 'pqp', 'vagabundo', 'vagabunda', 'corno', 'corna',
+              'rapariga', 'macaco'
+            ];
+            
+            for (const ofensa of termosOfensivos) {
+              const regex = new RegExp('\\b' + ofensa + '\\b', 'i');
+              if (regex.test(corpoNormalizado)) {
+                contemSpam = true;
+                motivoSpam = `uso de ofensa grave ("${ofensa}")`;
+                // Para não deixar a IA de contexto "perdoar" o palavrão, nós não checamos a IA nesses casos.
+                break;
+              }
+            }
+          }
+
           // 2. Se houver termos customizados cadastrados no painel, bloqueamos como proibição absoluta
           if (!contemSpam && termosCustomizados) {
             for (const termo of termosCustomizados) {
@@ -867,7 +926,8 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
 
           // INTEGRAÇÃO DE CONTEXTO IA (VERIFICAÇÃO DE FALSOS POSITIVOS)
           // Se as listas de palavras (Regex) detectaram algo suspeito, pedimos a opinião da IA antes de punir
-          if (contemSpam && process.env.GEMINI_API_KEY) {
+          // Mas se o motivo for "ofensa grave", NÃO PERDOAMOS.
+          if (contemSpam && process.env.GEMINI_API_KEY && !motivoSpam.includes('ofensa grave')) {
             console.log(`🤖 [Moderador IA] Verificando contexto do texto de ${participanteId} com Gemini para evitar falso positivo...`);
             const resultadoIA = await analisarTextoComIA(corpo, process.env.GEMINI_API_KEY);
             if (resultadoIA === 'NAO') {
