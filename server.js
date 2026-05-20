@@ -305,7 +305,7 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
     };
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45000); // 45 segundos de limite
+    const timeout = setTimeout(() => controller.abort(), 25000); // 25 segundos de limite (menor que o timeout de 30s do Railway)
 
     const res = await fetch(url, {
       method: 'POST',
