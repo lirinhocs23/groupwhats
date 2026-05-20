@@ -229,12 +229,12 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
   try {
     const parts = [
       {
-        text: "Você é um moderador rigoroso de grupo de WhatsApp.\n" +
+        text: "Você é um moderador extremamente rigoroso de grupo de WhatsApp.\n" +
           "Analise os frames do vídeo ou a imagem enviada. Você DEVE responder SIM se houver:\n\n" +
           "1. ACIDENTES OU CARROS BATIDOS: Qualquer colisão de trânsito, carro amassado/batido, capotamento, atropelamento, viaturas de resgate ou pessoas acidentadas.\n" +
           "2. JOGOS DE AZAR / APOSTAS: Panfletos de cassino, robô do pix, apostas esportivas ou promessas de dinheiro fácil.\n" +
-          "3. PROPAGANDAS E VENDAS: Anúncios de venda de carros, motos, rifas ou propagandas comerciais de itens comuns.\n\n" +
-          "Caso contrário (se a imagem/vídeo for sobre pessoas soltando fogos de artifício/espadas juninas, fogueiras, cartazes de festas juninas ou conversas normais), responda NAO.\n\n" +
+          "3. PROPAGANDAS, SERVIÇOS E VENDAS: Anúncios de venda de carros, motos, rifas, cursos, serviços de TV/IPTV/streaming (como Netflix, HBO, Disney+, Prime Video, etc.), panfletos comerciais de qualquer comércio ou imagens promocionais que divulguem vendas ou contratação de serviços.\n\n" +
+          "Caso contrário (se a imagem/vídeo for sobre a cultura de espadas de fogo juninas, pessoas soltando fogos de artifício, fogueiras, cartazes de festas de São João locais, fotos normais do dia a dia dos membros ou conversas normais), responda NAO.\n\n" +
           "Responda ESTRITAMENTE com a palavra SIM ou NAO. Não escreva mais nada."
       }
     ];
@@ -1034,11 +1034,10 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
               }
             }
 
+            // Apenas registramos no console e prosseguimos para a análise de IA, permitindo
+            // mídias da tradição passarem caso sejam legítimas
             if (isForwarded) {
-              if (score >= 2 || !corpo.trim()) {
-                contemSpam = true;
-                motivoSpam = 'mídia compartilhada em massa / encaminhada';
-              }
+              console.log(`ℹ️ [SaaS Moderador] Mídia encaminhada detectada. Enviando para análise de IA.`);
             }
           }
 
