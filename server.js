@@ -1,4 +1,3 @@
-require("dotenv").config();
 require('dotenv').config();   // <--- CARREGA .env
 process.env.TZ = 'America/Sao_Paulo';
 const express = require('express');
@@ -311,7 +310,11 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
       });
     }
 
+<<<<<<< HEAD
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+=======
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+>>>>>>> cd47e56a33ad224ed9021ccc5df14e8dc6610f57
     const payload = {
       contents: [{ parts: parts }],
       generationConfig: {
@@ -326,7 +329,11 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
     };
 
     const controller = new AbortController();
+<<<<<<< HEAD
     const timeout = setTimeout(() => controller.abort(), 60000); // 25 segundos de limite (menor que o timeout de 30s do Railway)
+=======
+    const timeout = setTimeout(() => controller.abort(), 60000); // 60 segundos de limite (menor que o timeout de 30s do Railway)
+>>>>>>> cd47e56a33ad224ed9021ccc5df14e8dc6610f57
 
     const res = await fetch(url, {
       method: 'POST',
@@ -382,7 +389,11 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
  */
 async function analisarTextoComIA(texto, apiKey) {
   try {
+<<<<<<< HEAD
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+=======
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+>>>>>>> cd47e56a33ad224ed9021ccc5df14e8dc6610f57
     const payload = {
       contents: [
         {
