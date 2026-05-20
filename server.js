@@ -230,12 +230,18 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
     const parts = [
       {
         text: "Você é um moderador extremamente rigoroso de grupo de WhatsApp.\n" +
-          "Analise os frames do vídeo ou a imagem enviada. Você DEVE responder SIM se houver:\n\n" +
+          "Analise os frames do vídeo ou a imagem enviada. Você DEVE decidir se a imagem viola as regras do grupo.\n\n" +
+          "Regras Proibidas (responda true se houver alguma delas):\n" +
           "1. ACIDENTES OU CARROS BATIDOS: Qualquer colisão de trânsito, carro amassado/batido, capotamento, atropelamento, viaturas de resgate ou pessoas acidentadas.\n" +
           "2. JOGOS DE AZAR / APOSTAS: Panfletos de cassino, robô do pix, apostas esportivas ou promessas de dinheiro fácil.\n" +
           "3. PROPAGANDAS, SERVIÇOS E VENDAS: Anúncios de venda de carros, motos, rifas, cursos, serviços de TV/IPTV/streaming (como Netflix, HBO, Disney+, Prime Video, etc.), panfletos comerciais de qualquer comércio ou imagens promocionais que divulguem vendas ou contratação de serviços.\n\n" +
-          "Caso contrário (se a imagem/vídeo for sobre a cultura de espadas de fogo juninas, pessoas soltando fogos de artifício, fogueiras, cartazes de festas de São João locais, fotos normais do dia a dia dos membros ou conversas normais), responda NAO.\n\n" +
-          "Responda ESTRITAMENTE com a palavra SIM ou NAO. Não escreva mais nada."
+          "Regras Permitidas (responda false se for apenas isso):\n" +
+          "- Cultura de espadas de fogo juninas, pessoas soltando fogos de artifício artesanais, fogueiras, cartazes de festas de São João locais, fotos normais do dia a dia dos membros ou conversas normais.\n\n" +
+          "Você DEVE responder estritamente com um objeto JSON válido, contendo duas propriedades:\n" +
+          "{\n" +
+          "  \"raciocinio\": \"Sua justificativa em português descrevendo o que você vê na imagem e por que ela é proibida ou permitida.\",\n" +
+          "  \"proibido\": true ou false\n" +
+          "}"
       }
     ];
 
@@ -287,6 +293,9 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
     const payload = {
       contents: [{ parts: parts }],
+      generationConfig: {
+        responseMimeType: "application/json"
+      },
       safetySettings: [
         { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
         { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
@@ -309,7 +318,7 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
 
     if (!res.ok) {
       const errData = await res.json();
-      console.warn(`⚠️ API Gemini respondeu com erro HTTP ${res.status}:`, JSON.stringify(errData));
+      console.error(`⚠️ API Gemini respondeu com erro HTTP ${res.status}:`, JSON.stringify(errData));
       return 'NAO';
     }
 
@@ -318,7 +327,6 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
     // Verifica se a resposta foi bloqueada pelos filtros de segurança do Google
     if (data.promptFeedback && data.promptFeedback.blockReason) {
       console.warn(`⚠️ IA bloqueou a análise por motivo de segurança: ${data.promptFeedback.blockReason}`);
-      // Como somos moderação, se o Google bloqueou por "violência", é óbvio que devemos banir o vídeo!
       return 'SIM'; 
     }
     if (data.candidates && data.candidates[0] && data.candidates[0].finishReason === 'SAFETY') {
@@ -326,11 +334,21 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
       return 'SIM'; // O vídeo continha violência pesada.
     }
 
-    const textoOriginal = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sem resposta de texto';
-    console.log(`🧠 [Moderador IA] Resposta bruta do Gemini: "${textoOriginal.trim()}"`);
-
-    const textoResposta = textoOriginal.toUpperCase();
-    return textoResposta.includes('SIM') ? 'SIM' : 'NAO';
+    const textoOriginal = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    try {
+      const parsed = JSON.parse(textoOriginal.trim());
+      console.log(`🧠 [Moderador IA] Análise: "${parsed.raciocinio}" | Proibido: ${parsed.proibido}`);
+      return parsed.proibido ? 'SIM' : 'NAO';
+    } catch (parseErr) {
+      console.warn(`⚠️ Falha ao processar JSON da IA, usando fallback de texto bruto: "${textoOriginal.trim()}"`);
+      // Fallback robusto usando regex de palavra inteira (\b)
+      const textoUpper = textoOriginal.toUpperCase();
+      if (/\bSIM\b/.test(textoUpper) || /\bTRUE\b/.test(textoUpper)) {
+        return 'SIM';
+      }
+      return 'NAO';
+    }
   } catch (err) {
     console.error('⚠️ Erro na análise de visão do Gemini:', err.message);
     return 'NAO';
