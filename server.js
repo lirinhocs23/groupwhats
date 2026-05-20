@@ -309,7 +309,7 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
       });
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
     const payload = {
       contents: [{ parts: parts }],
       generationConfig: {
@@ -324,7 +324,7 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
     };
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000); // 25 segundos de limite (menor que o timeout de 30s do Railway)
+    const timeout = setTimeout(() => controller.abort(), 60000); // 60 segundos de limite (menor que o timeout de 30s do Railway)
 
     const res = await fetch(url, {
       method: 'POST',
@@ -380,7 +380,7 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
  */
 async function analisarTextoComIA(texto, apiKey) {
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
     const payload = {
       contents: [
         {
