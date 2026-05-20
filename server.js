@@ -100,16 +100,22 @@ function inicializarSessao(usuarioId, socket = null) {
     puppeteer: {
       headless: true,
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-renderer-backgrounding',
-        '--disable-background-timer-throttling',
-        '--disable-dev-shm-usage',
-        '--no-zygote',
-        '--single-process'
-      ]
+      args: (() => {
+        const baseArgs = [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding',
+          '--disable-background-timer-throttling'
+        ];
+        // --single-process e --no-zygote causam crashes imediatos do Chromium no Windows
+        if (process.platform !== 'win32') {
+          baseArgs.push('--disable-dev-shm-usage');
+          baseArgs.push('--no-zygote');
+          baseArgs.push('--single-process');
+        }
+        return baseArgs;
+      })()
     }
   });
 
