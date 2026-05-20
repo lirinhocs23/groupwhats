@@ -58,6 +58,18 @@ const usuariosSendoRemovidos = new Set();
 let delecaoEmAndamento = false;
 const filaDelecao = [];
 
+// Sistema de Rodízio de Chaves da API do Gemini
+let currentGeminiKeyIndex = 0;
+function getNextGeminiKey() {
+  const envKey = process.env.GEMINI_API_KEY;
+  if (!envKey) return null;
+  const keys = envKey.split(',').map(k => k.trim()).filter(k => k);
+  if (keys.length === 0) return null;
+  const keyToUse = keys[currentGeminiKeyIndex % keys.length];
+  currentGeminiKeyIndex++;
+  return keyToUse;
+}
+
 /**
  * Inicializa a sessão do WhatsApp para um usuário específico.
  */
@@ -980,9 +992,9 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
           // INTEGRAÇÃO DE CONTEXTO IA (VERIFICAÇÃO DE FALSOS POSITIVOS)
           // Se as listas de palavras (Regex) detectaram algo suspeito, pedimos a opinião da IA antes de punir
           // Mas se o motivo for "ofensa grave", NÃO PERDOAMOS.
-          if (contemSpam && process.env.GEMINI_API_KEY && !motivoSpam.includes('ofensa grave')) {
+          if (contemSpam && getNextGeminiKey() && !motivoSpam.includes('ofensa grave')) {
             console.log(`🤖 [Moderador IA] Verificando contexto do texto de ${participanteId} com Gemini para evitar falso positivo...`);
-            const resultadoIA = await analisarTextoComIA(corpo, process.env.GEMINI_API_KEY);
+            const resultadoIA = await analisarTextoComIA(corpo, getNextGeminiKey());
             if (resultadoIA === 'NAO') {
               // Liberado pela IA (Era uma conversa normal ou gíria)
               const nomeParticipante = msg._data.notifyName || participanteId.split('@')[0];
@@ -1067,7 +1079,7 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
           }
 
           // 4. Análise Avançada de Imagem e Vídeo por IA (Opcional - Ativo se houver GEMINI_API_KEY)
-          if (!contemSpam && msg.hasMedia && process.env.GEMINI_API_KEY) {
+          if (!contemSpam && msg.hasMedia && getNextGeminiKey()) {
             try {
               const media = await msg.downloadMedia();
               if (media) {
@@ -1089,7 +1101,7 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
                     const tipoMidia = media.mimetype.startsWith('image/') ? 'imagem' : 'vídeo';
                     console.log(`🤖 [Moderador IA] Analisando ${tipoMidia} de ${participanteId} (${tamanhoMB.toFixed(2)}MB) com Gemini Vision...`);
                     
-                    const resultadoIA = await analisarImagemComIA(media.data, media.mimetype, process.env.GEMINI_API_KEY);
+                    const resultadoIA = await analisarImagemComIA(media.data, media.mimetype, getNextGeminiKey());
                     
                     if (resultadoIA === 'SIM') {
                       contemSpam = true;
@@ -1454,7 +1466,7 @@ app.post('/api/groups/:groupId/links', async (req, res) => {
 // Rota para testar a imagem na IA (Gemini Vision Tester)
 app.post('/api/ia/test', async (req, res) => {
   const { base64Data, mimeType } = req.body;
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = getNextGeminiKey();
 
   if (!apiKey) {
     return res.status(400).json({ error: 'Chave API do Gemini não configurada no servidor!' });
