@@ -122,7 +122,9 @@ function inicializarSessao(usuarioId, socket = null) {
           '--disable-setuid-sandbox',
           '--disable-backgrounding-occluded-windows',
           '--disable-renderer-backgrounding',
-          '--disable-background-timer-throttling'
+          '--disable-background-timer-throttling',
+          '--disable-gpu',
+          '--disable-software-rasterizer'
         ];
         // --single-process e --no-zygote causam crashes imediatos do Chromium no Windows
         if (process.platform !== 'win32') {
