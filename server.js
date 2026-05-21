@@ -472,7 +472,7 @@ async function processarFilaDelecao() {
     try {
       await Promise.race([
         msg.delete(true),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout de 10s ao deletar')), 10000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout de 30s ao deletar')), 30000)
       ]);
       console.log(`🗑️ Mensagem proibida apagada no SaaS de forma sequencial na fila.`);
     } catch (err) {
