@@ -259,7 +259,7 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
           "Regras Proibidas (responda true se houver alguma delas):\n" +
           "1. ACIDENTES OU CARROS BATIDOS: Qualquer colisão de trânsito, carro amassado/batido, capotamento, atropelamento, viaturas de resgate ou pessoas acidentadas.\n" +
           "2. JOGOS DE AZAR / APOSTAS: Panfletos de cassino, robô do pix, apostas esportivas ou promessas de dinheiro fácil.\n" +
-          "3. PROPAGANDAS, SERVIÇOS E VENDAS: Anúncios de venda de carros, motos, rifas, cursos, serviços de TV/IPTV/streaming (como Netflix, HBO, Disney+, Prime Video, etc.), panfletos comerciais de qualquer comércio ou imagens promocionais que divulguem vendas ou contratação de serviços.\n\n" +
+          "3. PROPAGANDAS, SERVIÇOS E VENDAS: Anúncios de venda ou comércio de qualquer produto ou serviço, incluindo veículos (carros, motos), autopeças, rodas, pneus, aparelhos de som automotivo, alto-falantes, módulos, acessórios, rifas, cursos, serviços de TV/IPTV/streaming (como Netflix, HBO, Disney+, Prime Video, etc.), panfletos comerciais de qualquer comércio, ou imagens promocionais que divulguem vendas ou contratação de serviços.\n\n" +
           "Regras Permitidas (responda false se for apenas isso):\n" +
           "- Cultura de espadas de fogo juninas, pessoas soltando fogos de artifício artesanais, fogueiras, cartazes de festas de São João locais, fotos normais do dia a dia dos membros ou conversas normais.\n\n" +
           "Você DEVE responder estritamente com um objeto JSON válido, contendo duas propriedades:\n" +
@@ -315,7 +315,7 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
       });
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
     const payload = {
       contents: [{ parts: parts }],
       generationConfig: {
@@ -386,7 +386,7 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
  */
 async function analisarTextoComIA(texto, apiKey) {
   try {
-    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
     const payload = {
       contents: [
         {
