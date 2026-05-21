@@ -329,23 +329,49 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
       ]
     };
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60000); // 60 segundos de limite (menor que o timeout de 30s do Railway)
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeout);
-
-    if (!res.ok) {
-      const errData = await res.json();
-      console.error(`⚠️ API Gemini respondeu com erro HTTP ${res.status}:`, JSON.stringify(errData));
-      return 'NAO';
+        const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000); // 60 segundos timeout
+    // Retry logic for transient 503 errors – up to 3 attempts
+    const maxAttempts = 3;
+    let attempt = 0;
+    let res;
+    while (attempt < maxAttempts) {
+      try {
+        attempt++;
+        console.log(`⚡️ [Moderador IA] Tentativa ${attempt} de chamar Gemini API`);
+        res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+        if (res.ok) break; // sucesso
+        const errData = await res.json();
+        console.error(`⚠️ API Gemini respondeu com erro HTTP ${res.status}:`, JSON.stringify(errData));
+        if (res.status === 503) {
+          const delay = Math.pow(2, attempt) * 1000; // exponencial 2s,4s,8s
+          console.warn(`⚠️ Gemini em alta demanda, aguardando ${delay}ms antes da nova tentativa...`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+        // outros erros não são reintentos
+        break;
+      } catch (err) {
+        console.error('⚠️ Erro ao chamar Gemini API:', err.message);
+        if (attempt >= maxAttempts) break;
+        const delay = Math.pow(2, attempt) * 1000;
+        console.warn(`⚠️ Nova tentativa em ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+      }
     }
+    clearTimeout(timeout);
+    if (!res || !res.ok) {
+      console.error('⚠️ Falha ao obter resposta válida da Gemini API após tentativas');
+      return 'NAO';
+    }    
+
+
+
 
     const data = await res.json();
     
