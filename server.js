@@ -115,7 +115,7 @@ function inicializarSessao(usuarioId, socket = null) {
     }),
     puppeteer: {
       headless: true,
-      executablePath: '/usr/bin/google-chrome-stable',
+      // executablePath: '/usr/bin/google-chrome-stable',
       args: (() => {
         const baseArgs = [
           '--no-sandbox',
