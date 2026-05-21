@@ -14,6 +14,10 @@ const dayjs = require('dayjs');
 const ffmpeg = require('fluent-ffmpeg');
 const os = require('os');
 const crypto = require('crypto');
+const { extrairTexto, gerarHashImagem } = require('./src/ocr');
+const { contemProibido } = require('./src/blacklist');
+const { getCache, setCache } = require('./src/cache');
+const { waitRateLimit } = require('./src/rateLimiter');
 
 // Buffer de logs na memória para depuração remota rápida do SaaS
 const debugLogs = [];
@@ -1110,43 +1114,85 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             }
           }
 
-          // 4. Análise Avançada de Imagem e Vídeo por IA (Opcional - Ativo se houver GEMINI_API_KEY)
-          if (!contemSpam && msg.hasMedia && getNextGeminiKey()) {
+          // 4. Análise Avançada Híbrida: OCR Local -> Blacklist -> IA (Gemini)
+          if (!contemSpam && msg.hasMedia) {
             try {
               const media = await msg.downloadMedia();
-              if (media) {
-                if (media.mimetype.startsWith('image/') || media.mimetype.startsWith('video/')) {
-                  // Estima o tamanho a partir do base64 (3/4 do comprimento da string base64)
-                  const tamanhoMB = (media.data.length * 0.75) / (1024 * 1024);
+              if (media && (media.mimetype.startsWith('image/') || media.mimetype.startsWith('video/'))) {
+                const tamanhoMB = (media.data.length * 0.75) / (1024 * 1024);
+                
+                if (tamanhoMB > 10) {
+                  console.log(`⚠️ [Moderador] Mídia de ${participanteId} ignorada por tamanho excessivo (${tamanhoMB.toFixed(2)}MB > 10MB)`);
+                  io.to(usuarioId).emit('log_seguranca', {
+                    data: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+                    grupo: nomeGrupo,
+                    membro: participanteId.split('@')[0],
+                    nome: msg._data.notifyName || 'Membro',
+                    acao: 'ALLOW',
+                    motivo: `Mídia ignorada por tamanho excessivo (${tamanhoMB.toFixed(2)}MB > 10MB)`
+                  });
+                } else {
+                  const tipoMidia = media.mimetype.startsWith('image/') ? 'imagem' : 'vídeo';
+                  const mediaBuffer = Buffer.from(media.data, 'base64');
                   
-                  if (tamanhoMB > 10) {
-                    console.log(`⚠️ [Moderador IA] Mídia de ${participanteId} ignorada por tamanho excessivo (${tamanhoMB.toFixed(2)}MB > 10MB)`);
-                    io.to(usuarioId).emit('log_seguranca', {
-                      data: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
-                      grupo: nomeGrupo,
-                      membro: participanteId.split('@')[0],
-                      nome: msg._data.notifyName || 'Membro',
-                      acao: 'ALLOW',
-                      motivo: `Mídia (${media.mimetype.startsWith('image/') ? 'imagem' : 'vídeo'}) ignorada por tamanho excessivo (${tamanhoMB.toFixed(2)}MB > 10MB)`
-                    });
-                  } else {
-                    const tipoMidia = media.mimetype.startsWith('image/') ? 'imagem' : 'vídeo';
-                    console.log(`🤖 [Moderador IA] Analisando ${tipoMidia} de ${participanteId} (${tamanhoMB.toFixed(2)}MB) com Gemini Vision...`);
-                    
-                    const resultadoIA = await analisarImagemComIA(media.data, media.mimetype, getNextGeminiKey());
-                    
-                    if (resultadoIA === 'SIM') {
+                  // 4.1. Checar Cache
+                  const hash = gerarHashImagem(mediaBuffer);
+                  const cacheResult = getCache(hash);
+                  
+                  if (cacheResult) {
+                    console.log(`🗂️ [CACHE] Mídia já analisada anteriormente. Resultado: ${cacheResult}`);
+                    if (cacheResult === 'SIM') {
                       contemSpam = true;
-                      motivoSpam = `conteúdo visual impróprio detectado por Inteligência Artificial no ${tipoMidia}`;
-                    } else {
-                      // Log de sucesso/liberação da IA
+                      motivoSpam = `conteúdo impróprio detectado (via Cache) no ${tipoMidia}`;
+                    }
+                  } else {
+                    let resultadoIA = 'NAO';
+                    let bloqueadoPorOCR = false;
+
+                    // 4.2. OCR (Somente Imagens)
+                    if (tipoMidia === 'imagem') {
+                      try {
+                        console.log(`🔍 [OCR] Iniciando extração de texto para ${participanteId}...`);
+                        const textoExtraido = await extrairTexto(mediaBuffer);
+                        if (textoExtraido) {
+                          console.log(`📝 [OCR] Texto extraído: "${textoExtraido.substring(0, 50)}..."`);
+                          if (contemProibido(textoExtraido)) {
+                            console.log(`🛑 [BLACKLIST] Texto extraído contém palavras proibidas! Bloqueando sem chamar Gemini.`);
+                            bloqueadoPorOCR = true;
+                            resultadoIA = 'SIM';
+                            contemSpam = true;
+                            motivoSpam = `palavras proibidas detectadas no texto da imagem (OCR)`;
+                          }
+                        }
+                      } catch (ocrErr) {
+                        console.error('⚠️ [OCR] Falha na extração de texto:', ocrErr.message);
+                      }
+                    }
+
+                    // 4.3. Gemini API (Se não bloqueado pelo OCR e tiver chave)
+                    if (!bloqueadoPorOCR && getNextGeminiKey()) {
+                      console.log(`🤖 [Moderador IA] Analisando ${tipoMidia} de ${participanteId} (${tamanhoMB.toFixed(2)}MB) com Gemini Vision...`);
+                      await waitRateLimit(); // Aguarda o rate limiter
+                      resultadoIA = await analisarImagemComIA(media.data, media.mimetype, getNextGeminiKey());
+                      
+                      if (resultadoIA === 'SIM') {
+                        contemSpam = true;
+                        motivoSpam = `conteúdo visual impróprio detectado por IA no ${tipoMidia}`;
+                      }
+                    }
+
+                    // Salva o resultado final no cache (se processou por OCR ou IA)
+                    setCache(hash, resultadoIA);
+
+                    // Log de liberação
+                    if (!contemSpam) {
                       io.to(usuarioId).emit('log_seguranca', {
                         data: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
                         grupo: nomeGrupo,
                         membro: participanteId.split('@')[0],
                         nome: msg._data.notifyName || 'Membro',
                         acao: 'ALLOW',
-                        motivo: `${tipoMidia.charAt(0).toUpperCase() + tipoMidia.slice(1)} de ${tamanhoMB.toFixed(2)}MB analisado e LIBERADO pela IA`
+                        motivo: `${tipoMidia.charAt(0).toUpperCase() + tipoMidia.slice(1)} de ${tamanhoMB.toFixed(2)}MB analisado e LIBERADO`
                       });
                     }
                   }
