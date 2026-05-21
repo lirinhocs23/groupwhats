@@ -1,4 +1,9 @@
-const { createWorker } = require('tesseract.js');
+let createWorker;
+try {
+  ({ createWorker } = require('tesseract.js'));
+} catch (e) {
+  console.warn('⚠️ tesseract.js not found, OCR functionality disabled');
+}
 const CryptoJS = require('crypto-js');
 
 /**

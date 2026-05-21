@@ -470,10 +470,7 @@ async function processarFilaDelecao() {
   while (filaDelecao.length > 0) {
     const msg = filaDelecao.shift();
     try {
-      await Promise.race([
-        msg.delete(true),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout de 30s ao deletar')), 30000)
-      ]);
+      await msg.delete(true);
       console.log(`🗑️ Mensagem proibida apagada no SaaS de forma sequencial na fila.`);
     } catch (err) {
       console.error('❌ Erro ao apagar mensagem na fila do SaaS:', err.message);
