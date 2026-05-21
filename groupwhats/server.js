@@ -300,7 +300,11 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
           }
         }
       } finally {
-        if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
+        if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath); // Delete video file
+        // Cleanup any temporary frame images left over
+        fs.readdirSync(tmpDir).filter(f => f.startsWith(id + '_') && f.endsWith('.jpg')).forEach(f => {
+          try { fs.unlinkSync(path.join(tmpDir, f)); } catch (e) { console.error('Failed to delete temp frame', f, e); }
+        });
       }
     } else {
       // Imagens podem ir via inlineData rapidamente
