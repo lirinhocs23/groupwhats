@@ -319,7 +319,7 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
       });
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     const payload = {
       contents: [{ parts: parts }],
       generationConfig: {
@@ -416,7 +416,7 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
  */
 async function analisarTextoComIA(texto, apiKey) {
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     const payload = {
       contents: [
         {
@@ -470,7 +470,10 @@ async function processarFilaDelecao() {
   while (filaDelecao.length > 0) {
     const msg = filaDelecao.shift();
     try {
-      await msg.delete(true);
+      await Promise.race([
+        msg.delete(true),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout de 10s ao deletar')), 10000))
+      ]);
       console.log(`🗑️ Mensagem proibida apagada no SaaS de forma sequencial na fila.`);
     } catch (err) {
       console.error('❌ Erro ao apagar mensagem na fila do SaaS:', err.message);
@@ -1247,7 +1250,17 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
 
             // 2. Registra advertência de forma persistente
             const advCount = await database.registrarAdvertencia(usuarioId, groupId, participanteId);
-            const contato = await msg.getContact();
+            
+            let contato = null;
+            try {
+              contato = await Promise.race([
+                msg.getContact(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout getContact')), 5000))
+              ]);
+            } catch (err) {
+              console.warn(`⚠️ [SaaS Moderador] getContact demorou muito para ${participanteId}, usando ID puro.`);
+              contato = { id: { user: participanteId.split('@')[0] }, pushname: 'Membro', name: 'Membro' };
+            }
             const nomeMembro = contato ? (contato.name || contato.pushname || participanteId.split('@')[0]) : 'Membro';
 
             // Notifica o painel em tempo real sobre o log de moderação via Websocket
