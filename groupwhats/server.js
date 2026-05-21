@@ -305,6 +305,10 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
         fs.readdirSync(tmpDir).filter(f => f.startsWith(id + '_') && f.endsWith('.jpg')).forEach(f => {
           try { fs.unlinkSync(path.join(tmpDir, f)); } catch (e) { console.error('Failed to delete temp frame', f, e); }
         });
+        // Additional cleanup: delete any leftover PNG files in tmpDir for this message
+        fs.readdirSync(tmpDir).filter(f => f.startsWith(id + '_') && f.endsWith('.png')).forEach(f => {
+          try { fs.unlinkSync(path.join(tmpDir, f)); } catch (e) { console.error('Failed to delete temp PNG', f, e); }
+        });
       }
     } else {
       // Imagens podem ir via inlineData rapidamente
