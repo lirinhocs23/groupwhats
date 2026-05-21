@@ -115,14 +115,17 @@ function inicializarSessao(usuarioId, socket = null) {
     }),
     puppeteer: {
       headless: true,
-      executablePath: '/usr/bin/google-chrome-stable',
+      // executablePath: '/usr/bin/google-chrome-stable',
       args: (() => {
         const baseArgs = [
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-backgrounding-occluded-windows',
           '--disable-renderer-backgrounding',
-          '--disable-background-timer-throttling'
+          '--disable-background-timer-throttling',
+          '--disable-gpu',
+          '--disable-software-rasterizer',
+          '--headless=old'
         ];
         // --single-process e --no-zygote causam crashes imediatos do Chromium no Windows
         if (process.platform !== 'win32') {
