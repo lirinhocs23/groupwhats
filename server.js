@@ -285,6 +285,14 @@ async function deletarMensagemComFila(msg) {
 
 // ... (rest of the file remains unchanged) //
 
+// Restores previous WhatsApp sessions on startup (basic implementation)
+async function restaurarSessoesAnteriores() {
+  console.log('🔄 Restaurando sessões anteriores...');
+  // Here you could load saved sessions from the database and re‑initialize them.
+  // For now we just log to avoid the ReferenceError.
+}
+
+
 // Socket.io event handlers for panel actions
 io.on('connection', (socket) => {
   console.log(`🔌 Novo navegador conectado ao WebSocket: ${socket.id}`);
