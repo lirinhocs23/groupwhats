@@ -53,7 +53,7 @@ app.use(cors());
 app.use((req, res, next) => {
   res.setHeader(
     "Content-Security-Policy",
-    "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;"
+    "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; font-src * data: blob: 'unsafe-inline';"
   );
   next();
 });
