@@ -289,30 +289,30 @@ async function deletarMensagemComFila(msg) {
   processarFilaDelecao();
 }
 
-// ... (rest of the file remains unchanged) //
-
-// Restores previous WhatsApp sessions on startup (basic implementation)
+// Restores previous WhatsApp sessions on startup (robust implementation)
 async function restaurarSessoesAnteriores() {
   console.log('🔄 Restaurando sessões anteriores...');
   const path = require('path');
   const fs = require('fs-extra');
   const dbPath = path.join(__dirname, 'db_saas.json');
   try {
-    const data = await fs.readJson(dbPath);
-    if (Array.isArray(data.sessoes)) {
-      for (const sess of data.sessoes) {
-        // Resetar status para evitar sessões pendentes ao iniciar
-        sess.status = 'desconectado';
-        sess.numero = '';
-        sess.updatedAt = new Date().toISOString();
-      }
-      await fs.writeJson(dbPath, data, { spaces: 2 });
-      console.log(`✅ Sessões resetadas para 'desconectado' (${data.sessoes.length})`);
-    } else {
-      console.log('⚠️ Nenhuma sessão encontrada no banco de dados.');
+    let data = await fs.readJson(dbPath);
+    if (!Array.isArray(data.sessoes)) data.sessoes = [];
+    for (const sess of data.sessoes) {
+      sess.status = 'desconectado';
+      sess.numero = '';
+      sess.updatedAt = new Date().toISOString();
     }
+    await fs.writeJson(dbPath, data, { spaces: 2 });
+    console.log(`✅ Sessões resetadas (${data.sessoes.length})`);
   } catch (err) {
-    console.error('❌ Erro ao restaurar sessões anteriores:', err.message);
+    if (err.code === 'ENOENT') {
+      console.warn('⚠️ db_saas.json não encontrado. Inicializando banco...');
+      const database = require('./database');
+      await database.inicializarDB();
+    } else {
+      console.error('❌ Erro ao restaurar sessões anteriores:', err.message);
+    }
   }
 }
 

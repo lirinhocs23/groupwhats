@@ -4,4 +4,4 @@ node_modules/
 relatorios/
 *.log
 .env
-db_saas.json
+# db_saas.json
