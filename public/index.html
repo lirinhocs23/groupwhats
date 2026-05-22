@@ -293,11 +293,18 @@
             </div>
             <div class="form-group-mini">
               <label for="input-keywords">Termos Proibidos (Separados por vírgula)</label>
-              <textarea id="input-keywords" rows="3" placeholder="Ex: rifa, aposta, tigrinho, compre, vendo..."></textarea>
+              <textarea id="input-keywords" rows="3" placeholder="Ex: rifa, aposta, tigrinho, betano..."></textarea>
+              <p class="form-hint" style="font-size:0.8rem;color:#94a3b8;margin-top:6px;">
+                Evite palavras soltas como <strong>compra</strong>, <strong>comprar</strong> ou <strong>morreu</strong> — isso apaga frases normais (&quot;comprar pão&quot;, &quot;morreu de rir&quot;). O bot já segue o arquivo <strong>regras.md</strong> do projeto.
+              </p>
             </div>
             <div class="form-group-mini">
               <label for="input-links">Links Permitidos / Whitelist de Domínios</label>
               <textarea id="input-links" rows="2" placeholder="Ex: youtube.com, instagram.com, google.com..."></textarea>
+            </div>
+            <div class="form-group-mini" style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+              <input type="checkbox" id="input-moderacao-ativa" checked>
+              <label for="input-moderacao-ativa" style="margin:0;">Ativar moderação automática neste grupo</label>
             </div>
           </div>
           <div class="glass-card vision-card">

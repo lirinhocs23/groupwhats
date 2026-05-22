@@ -12,9 +12,17 @@
       "usuarioId": "usr_1",
       "sessionId": "session_usr_1",
       "status": "conectado",
-      "numero": "557391214825",
+      "numero": "557398266511",
       "createdAt": "2026-05-18T20:49:04.101Z",
-      "updatedAt": "2026-05-18T21:22:10.404Z"
+      "updatedAt": "2026-05-22T14:33:38.429Z"
+    },
+    {
+      "usuarioId": "usr_1779453323831",
+      "sessionId": "session_usr_1779453323831",
+      "status": "desconectado",
+      "numero": "557398266511",
+      "createdAt": "2026-05-22T12:35:37.069Z",
+      "updatedAt": "2026-05-22T14:06:13.583Z"
     }
   ],
   "atividade": {
@@ -2616,6 +2624,181 @@
             "totalMensagens": 4,
             "ultimaMensagem": "2026-05-18T22:16:39.856Z",
             "nome": "Edgard Carneiro"
+          },
+          "5513974079318@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Adilson"
+          },
+          "553291217715@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Adriano"
+          },
+          "5511984279333@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Alexsandro Jean Domingues"
+          },
+          "557588040476@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Andre Matos Junqueira ✈️"
+          },
+          "554499190694@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Arnaldo Jr"
+          },
+          "555599686159@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Carlos Rohde"
+          },
+          "556792410248@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Carlos Thiry"
+          },
+          "5527997658999@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Crispiliano Jr  🇧🇷"
+          },
+          "5511943513960@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Daniel Bortolini Sette"
+          },
+          "5519984512024@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Dr. Monsó"
+          },
+          "5511942142550@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Eduardo ∴"
+          },
+          "5511978737673@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "evandro barros"
+          },
+          "556792131178@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Fernando Henrique"
+          },
+          "554899923818@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Gilmar Jr"
+          },
+          "557382564470@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Henrique Pena"
+          },
+          "558699618315@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Icaro Moura"
+          },
+          "554792521438@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Joao Gustavo"
+          },
+          "553191348257@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "João Pedro S. Ferraz"
+          },
+          "5512981695773@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Lucas"
+          },
+          "559584039126@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Lucas agm"
+          },
+          "558195299934@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Lucas Carvalho"
+          },
+          "555182001428@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Lucas Cunha"
+          },
+          "5515991191428@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Luciano"
+          },
+          "555599178012@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Marcos Lorenzzoni"
+          },
+          "5514996600467@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Mateus"
+          },
+          "555391190054@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Renan"
+          },
+          "554384635384@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Renan Frederick"
+          },
+          "556292056586@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Fernando Campos De Oliveira"
+          },
+          "554991341220@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Ederaldo"
+          },
+          "553199133803@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Anderson Representante Sieva Kepler"
+          },
+          "559885048808@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Rom@"
+          },
+          "5511984457537@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Vagner Francischetti"
+          },
+          "5511958335173@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Wiliancars Transmissão Automática."
+          },
+          "557591911329@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Yan Oliveira"
+          },
+          "5511916255500@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "unknown"
           }
         }
       },
@@ -2633,8 +2816,8 @@
             "nome": "Geo"
           },
           "557581325238@c.us": {
-            "totalMensagens": 1,
-            "ultimaMensagem": "2026-05-18T21:22:10.626Z",
+            "totalMensagens": 5,
+            "ultimaMensagem": "2026-05-22T14:47:38.157Z",
             "nome": "Nunes"
           },
           "557188375311@c.us": {
@@ -3058,8 +3241,8 @@
             "nome": "Sena"
           },
           "557587071401@c.us": {
-            "totalMensagens": 1,
-            "ultimaMensagem": "2026-05-18T21:59:31.040Z",
+            "totalMensagens": 2,
+            "ultimaMensagem": "2026-05-22T14:48:58.541Z",
             "nome": "Sergio"
           },
           "557592323671@c.us": {
@@ -3121,12 +3304,54 @@
             "totalMensagens": 0,
             "ultimaMensagem": "",
             "nome": "Yan"
+          },
+          "557581619948@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "FreitasⓂ️"
+          },
+          "557588829322@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Fábio Henrique"
+          },
+          "5527997581727@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "internet vpn"
           }
-        }
+        },
+        "moderacaoAtiva": true,
+        "termosProibidos": [],
+        "linksPermitidos": [
+          "google.com",
+          "youtube.com",
+          "youtu.be",
+          "instagram.com",
+          "facebook.com",
+          "fb.com",
+          "twitter.com",
+          "x.com",
+          "tiktok.com",
+          "whatsapp.com",
+          "wa.me",
+          "linkedin.com"
+        ]
       },
       "120363045074699451@g.us": {
         "nomeGrupo": "Fd",
-        "membros": {}
+        "membros": {
+          "557391214825@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "~ Lirinho 😎"
+          },
+          "557398266511@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "NL Sistemas"
+          }
+        }
       },
       "120363404168421438@g.us": {
         "nomeGrupo": "‎‪Mãe Tim, Neide e +55 71 98107-5988",
@@ -3227,6 +3452,307 @@
       "120363291793115874@g.us": {
         "nomeGrupo": "Teste",
         "membros": {}
+      },
+      "120363409928216518@g.us": {
+        "nomeGrupo": "Fd",
+        "membros": {
+          "557391214825@c.us": {
+            "totalMensagens": 5,
+            "ultimaMensagem": "2026-05-22T14:34:14.430Z",
+            "nome": "Lirinho Coins"
+          },
+          "557398266511@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "NL Tecnologias"
+          }
+        },
+        "advertencias": {
+          "557391214825@c.us": 1
+        },
+        "moderacaoAtiva": true,
+        "termosProibidos": [],
+        "linksPermitidos": [
+          "google.com",
+          "youtube.com",
+          "youtu.be",
+          "instagram.com",
+          "facebook.com",
+          "fb.com",
+          "twitter.com",
+          "x.com",
+          "tiktok.com",
+          "whatsapp.com",
+          "wa.me",
+          "linkedin.com"
+        ]
+      }
+    },
+    "usr_1779453323831": {
+      "120363409928216518@g.us": {
+        "nomeGrupo": "Fd",
+        "membros": {
+          "557391214825@c.us": {
+            "totalMensagens": 2,
+            "ultimaMensagem": "2026-05-22T14:05:52.561Z",
+            "nome": "~ Lirinho 😎"
+          },
+          "557398266511@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "NL Sistemas"
+          }
+        }
+      },
+      "120363289980162008@g.us": {
+        "nomeGrupo": "Espada_ruadaestacao",
+        "membros": {
+          "557391214825@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "~ Lirinho 😎"
+          },
+          "557188375311@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "🧑‍🔧 izanqer"
+          },
+          "557583537422@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "😉😉😉"
+          },
+          "557194019870@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "🙋🏽‍♂️"
+          },
+          "557581370031@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Abençoado Por Deus"
+          },
+          "557592427637@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Adson Nascimento"
+          },
+          "557582937288@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Alan Oliveira "
+          },
+          "557588692045@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Albert"
+          },
+          "557581090213@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Aldo Brandão"
+          },
+          "557581467919@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Alex Lopes"
+          },
+          "557582355325@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "alfredosantanaaquinoaquin"
+          },
+          "557187226144@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "ALMEIDA"
+          },
+          "557185155099@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Bruno Brito"
+          },
+          "557196572623@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Caiqu🍃"
+          },
+          "557192095019@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Danilo Sena"
+          },
+          "557591690662@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Djavan"
+          },
+          "557581722717@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Eduardo Cunha"
+          },
+          "557191002244@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Fábio"
+          },
+          "557581619948@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "FreitasⓂ️"
+          },
+          "557583074783@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "g"
+          },
+          "557582940299@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Gabriel Andrade"
+          },
+          "557581406781@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Gs"
+          },
+          "557583120745@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Hiagoo diiaz"
+          },
+          "557592153812@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Jorge"
+          },
+          "557591648230@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Js😶‍🌫️"
+          },
+          "557588920359@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Ediomar_olvr"
+          },
+          "5527997581727@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "internet vpn"
+          },
+          "557588829322@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Fábio Henrique"
+          },
+          "557582884892@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "gui"
+          },
+          "557583213705@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Geovane"
+          },
+          "557591047273@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Junior Fernando"
+          },
+          "557583367332@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Junior Lanka"
+          },
+          "557583445325@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Lucas"
+          },
+          "557581672950@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Nando😎😜"
+          },
+          "557398266511@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "NL Sistemas"
+          },
+          "557581325238@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Nunes"
+          },
+          "557583107026@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Pablo Souza"
+          },
+          "557182842830@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Paulo Avelar"
+          },
+          "557599202211@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Raphael"
+          },
+          "557182562531@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Raquel 🩷 Davi 💙"
+          },
+          "557191528844@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Ricardo"
+          },
+          "557183349465@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Sena"
+          },
+          "557587071401@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Sergio"
+          },
+          "554796527938@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Teixeira🤝🏾"
+          },
+          "557582861620@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Thii🍃"
+          },
+          "557498082770@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "Uesllen"
+          }
+        }
+      },
+      "120363045074699451@g.us": {
+        "nomeGrupo": "Vc",
+        "membros": {
+          "557391214825@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "~ Lirinho 😎"
+          },
+          "557398266511@c.us": {
+            "totalMensagens": 0,
+            "ultimaMensagem": "",
+            "nome": "NL Sistemas"
+          }
+        }
       }
     }
   }

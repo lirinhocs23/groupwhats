@@ -3,6 +3,7 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs-extra');
 const dayjs = require('dayjs');
+const { avaliarTexto } = require('./src/moderationRules');
 
 // Caminho do arquivo de atividade
 const ATIVIDADE_PATH = './atividade.json';
@@ -24,6 +25,13 @@ async function carregarAtividade() {
 // Salva o banco de dados de atividade
 async function salvarAtividade(dados) {
   await fs.writeJson(ATIVIDADE_PATH, dados, { spaces: 2 });
+}
+
+function podarIdsProcessados(set, maxSize = 1000, keepSize = 500) {
+  if (set.size <= maxSize) return;
+  const manter = [...set].slice(-keepSize);
+  set.clear();
+  manter.forEach((id) => set.add(id));
 }
 
 // Inicializa o cliente WhatsApp com autenticação local (persiste sessão)
@@ -130,55 +138,10 @@ async function processarMensagem(msg, eventoOrigem) {
       }
 
       if (!eAdmin) {
-        const corpoMinusculo = corpo.toLowerCase();
+        const avaliacao = avaliarTexto(corpo, { grupoEspada: true });
 
-        // Exceção Cultural: Como estamos no grupo da estação, liberamos termos e negociações da tradição de espadas
-        const isTradicaoEspada =
-          corpoMinusculo.includes('espada') ||
-          corpoMinusculo.includes('espadas') ||
-          corpoMinusculo.includes('polvora') ||
-          corpoMinusculo.includes('pólvora') ||
-          corpoMinusculo.includes('barro') ||
-          corpoMinusculo.includes('bambivis') ||
-          corpoMinusculo.includes('prensa') ||
-          corpoMinusculo.includes('bambu') ||
-          corpoMinusculo.includes('fogueira') ||
-          corpoMinusculo.includes('corda') ||
-          corpoMinusculo.includes('cordas') ||
-          corpoMinusculo.includes('pilao') ||
-          corpoMinusculo.includes('pilão') ||
-          corpoMinusculo.includes('cilindro');
-
-        if (!isTradicaoEspada) {
-          const termosProibidos = [
-            'vendo', 'vende-se', 'compre', 'oportunidade única', 'oportunidade unica', 'som automotivo',
-            'chama no pv', 'chama no pv interessados', 'interessados chamar no pv', 'chama no inbox', 
-            'chama pv', 'chama no zap', 'valor no pv', 'chamar no pv', 'promoção de hoje', 
-            'venda de carro', 'venda de moto', 'geladeira usada', 'plataforma pagando', 
-            'tigrinho pagando', 'link de aposta', 'olx.com', 'mercadolivre.com', 'zé da barata', 
-            'ze da barata', 'ligue e contrate', 'contratar', 'contrate', 'ligue', 'propaganda', 
-            'propagandas', 'anunciar', 'anuncio', 'anúncio', 'vender', 'vende-se-loja', 
-            'vende-se lojinha', 'vende-se loja virtual', 'comprar', 'promoção', 'sorte online', 
-            'trabalhe em casa', 'renda extra', 'dinheiro rápido', 'ganhe dinheiro', 'emprego', 
-            'vaga', 'oportunidade de emprego', 'trabalhe', 'aposta ganhadora', 'investimento garantido', 
-            'previsão de jogo', 'esporte bets', 'imax control', 'control',
-            // Termos de Rifeiro / Rifa
-            'rifa', 'rifas', 'rifeiro', 'rifeiros', 'bilhete', 'bilhetes', 'sorteio', 
-            'sorteios', 'cota', 'cotas', 'ação entre amigos', 'acao entre amigos', 
-            'rifa online', 'adquira seu bilhete', 'adquira sua cota', 'compra de cota', 
-            'comprar cota', 'tabela de rifa', 'tabela de rifas', 'adquira já', 'adquira ja'
-          ];
-
-          let contemSpam = false;
-          for (const termo of termosProibidos) {
-            if (corpoMinusculo.includes(termo)) {
-              contemSpam = true;
-              break;
-            }
-          }
-
-          if (contemSpam) {
-            console.log(`🚨 SPAM DETECTADO de ${userId} no grupo "${nomeGrupo}": "${corpo.substring(0, 100)}"`);
+        if (!avaliacao.permitido) {
+            console.log(`🚨 SPAM DETECTADO de ${userId} no grupo "${nomeGrupo}": ${avaliacao.motivo || corpo.substring(0, 100)}`);
 
             // 1. Apaga a mensagem na hora!
             try {
@@ -231,7 +194,6 @@ async function processarMensagem(msg, eventoOrigem) {
             }
 
             return; // Para o fluxo de processamento para não computar essa mensagem como ativa
-          }
         }
       }
     }
@@ -804,15 +766,14 @@ const mensagensProcessadas = new Set();
 client.on('message', (msg) => {
   if (mensagensProcessadas.has(msg.id._serialized)) return;
   mensagensProcessadas.add(msg.id._serialized);
-  // Limpa mensagens antigas a cada 1000 entradas
-  if (mensagensProcessadas.size > 1000) mensagensProcessadas.clear();
+  podarIdsProcessados(mensagensProcessadas);
   processarMensagem(msg, 'message');
 });
 
 client.on('message_create', (msg) => {
   if (mensagensProcessadas.has(msg.id._serialized)) return;
   mensagensProcessadas.add(msg.id._serialized);
-  if (mensagensProcessadas.size > 1000) mensagensProcessadas.clear();
+  podarIdsProcessados(mensagensProcessadas);
   processarMensagem(msg, 'message_create');
 });
 

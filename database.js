@@ -373,8 +373,9 @@ async function obterEstatisticasGrupo(usuarioId, groupId, diasInativoDefault = 3
   for (const item of listaIdsMembros) {
     const membroId = item.id;
     
-    // Filtra apenas o próprio robô do dashboard para não poluir o gráfico
+    // Filtra o robô e administradores do grupo (mesma regra dos comandos /inativos e /fantasmas)
     if (botId && membroId === botId) continue;
+    if (item.isAdmin) continue;
 
     const m = membrosSalvosMapped[membroId] || {
       totalMensagens: 0,
@@ -436,7 +437,8 @@ async function obterEstatisticasGrupo(usuarioId, groupId, diasInativoDefault = 3
     ranking,
     membrosList,
     termosProibidos: (grupo && grupo.termosProibidos) || [],
-    linksPermitidos: (grupo && grupo.linksPermitidos) || []
+    linksPermitidos: (grupo && grupo.linksPermitidos) || [],
+    moderacaoAtiva: !!(grupo && grupo.moderacaoAtiva)
   };
 }
 
@@ -504,6 +506,21 @@ async function salvarTermosProibidos(usuarioId, groupId, termos) {
 /**
  * Salva a whitelist de domínios (links permitidos) de um grupo.
  */
+async function salvarModeracaoAtiva(usuarioId, groupId, ativa) {
+  const db = await lerDB();
+  if (!db.atividade[usuarioId]) {
+    db.atividade[usuarioId] = {};
+  }
+  if (!db.atividade[usuarioId][groupId]) {
+    db.atividade[usuarioId][groupId] = {
+      nomeGrupo: 'Grupo',
+      membros: {}
+    };
+  }
+  db.atividade[usuarioId][groupId].moderacaoAtiva = !!ativa;
+  await gravarDB(db);
+}
+
 async function salvarLinksPermitidos(usuarioId, groupId, links) {
   const db = await lerDB();
   if (!db.atividade[usuarioId]) {
@@ -546,6 +563,7 @@ module.exports = {
   registrarAdvertencia,
   zerarAdvertencias,
   salvarTermosProibidos,
+  salvarModeracaoAtiva,
   salvarLinksPermitidos,
   obterGrupos,
   obterEstatisticasGrupo

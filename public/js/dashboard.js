@@ -428,6 +428,8 @@ async function carregarEstatisticasGrupo(groupId, silenciarFeedback = false) {
     
     // Atualiza textareas com configurações do banco de dados local
     document.getElementById('input-keywords').value = (stats.termosProibidos || []).join(', ');
+    const modToggle = document.getElementById('input-moderacao-ativa');
+    if (modToggle) modToggle.checked = !!stats.moderacaoAtiva;
     document.getElementById('input-links').value = (stats.linksPermitidos || []).join(', ');
     
     // Atualiza tabela
@@ -830,11 +832,18 @@ document.getElementById('btn-salvar-config').addEventListener('click', async () 
   
   const keywordsText = document.getElementById('input-keywords').value;
   const linksText = document.getElementById('input-links').value;
+  const moderacaoAtiva = document.getElementById('input-moderacao-ativa')?.checked ?? true;
   
   const termos = keywordsText.split(',').map(s => s.trim()).filter(s => s.length > 0);
   const links = linksText.split(',').map(s => s.trim()).filter(s => s.length > 0);
   
   try {
+    const resMod = await fetch(`/api/groups/${selectedGroupId}/moderation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usuarioId: currentUser.id, ativa: moderacaoAtiva })
+    });
+
     const resKeywords = await fetch(`/api/groups/${selectedGroupId}/keywords`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -847,7 +856,7 @@ document.getElementById('btn-salvar-config').addEventListener('click', async () 
       body: JSON.stringify({ usuarioId: currentUser.id, links })
     });
     
-    if (resKeywords.ok && resLinks.ok) {
+    if (resMod.ok && resKeywords.ok && resLinks.ok) {
       btn.innerHTML = `<i class="fa-solid fa-check"></i> Regras Salvas!`;
       setTimeout(() => {
         btn.disabled = false;
