@@ -1,4 +1,21 @@
-const { avaliarTexto } = require('./moderationRules');
+const { avaliarTexto, resolverIdGrupo, ehMensagemDeGrupo } = require('./moderationRules');
+
+const grupoId = '120363123456789012@g.us';
+const donoId = '557398266511@c.us';
+
+if (resolverIdGrupo({ from: grupoId, to: donoId, fromMe: false }) !== grupoId) {
+  console.error('FALHA: grupo em msg.from (recebida)');
+  process.exit(1);
+}
+if (resolverIdGrupo({ from: donoId, to: grupoId, fromMe: true }) !== grupoId) {
+  console.error('FALHA: grupo em msg.to quando fromMe (comando do dono 66511)');
+  process.exit(1);
+}
+if (!ehMensagemDeGrupo({ from: donoId, to: grupoId, fromMe: true })) {
+  console.error('FALHA: ehMensagemDeGrupo com fromMe');
+  process.exit(1);
+}
+console.log('OK: resolverIdGrupo / fromMe dono sessão');
 
 const casos = [
   { msg: 'morreu de rir', esperado: true },

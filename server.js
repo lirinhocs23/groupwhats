@@ -15,15 +15,14 @@ const crypto = require('crypto');
 const {
   normalizarTextoParaFiltro,
   avaliarTexto,
-  PROMPT_REGRAS_GRUPO
+  PROMPT_REGRAS_GRUPO,
+  resolverParticipanteId,
+  resolverIdGrupo,
+  ehMensagemDeGrupo,
+  obterIdPrivadoRemetente,
+  deveProcessarMensagemAgora,
+  parseComando
 } = require('./src/moderationRules');
-
-function podarIdsProcessados(set, maxSize = 2000, keepSize = 1000) {
-  if (set.size <= maxSize) return;
-  const manter = [...set].slice(-keepSize);
-  set.clear();
-  manter.forEach((id) => set.add(id));
-}
 
 // Buffer de logs na memória para depuração remota rápida do SaaS
 const debugLogs = [];
@@ -76,8 +75,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Estrutura: { [usuarioId]: { client: Client, status: string, qr: string, numero: string } }
 const sessoesAtivas = {};
 
-// Controle Anti-Spam e Concorrência para evitar mensagens duplicadas
-const mensagensProcessadas = new Set();
+// Controle Anti-Spam e Concorrência (deduplicação de mensagens em moderationRules.deveProcessarMensagemAgora)
 const ultimosAvisosEnviados = {}; // { [participanteId]: timestamp }
 const usuariosSendoRemovidos = new Set();
 let delecaoEmAndamento = false;
@@ -221,11 +219,7 @@ function inicializarSessao(usuarioId, socket = null) {
     await encerrarSessao(usuarioId, true);
   });
 
-  // Evento: Captura de mensagens para estatísticas (Grupos apenas)
-  client.on('message', async (msg) => {
-    processarMensagemEntrada(usuarioId, client, msg);
-  });
-
+  // message_create inclui mensagens enviadas pelo dono da sessão (fromMe); "message" sozinho não
   client.on('message_create', async (msg) => {
     processarMensagemEntrada(usuarioId, client, msg);
   });
@@ -484,29 +478,45 @@ async function deletarMensagemComFila(msg) {
   processarFilaDelecao();
 }
 
+/** Atualiza a mensagem "Aguarde..." após enviar resultado no PV (com fallback se edit falhar). */
+async function concluirMensagemAguarde(msgFeedback, chat, texto) {
+  if (!msgFeedback) {
+    await chat.sendMessage(texto);
+    return;
+  }
+  try {
+    await msgFeedback.edit(texto);
+  } catch (err) {
+    console.warn('⚠️ Falha ao editar mensagem de aguarde:', err.message);
+    try {
+      await chat.sendMessage(texto);
+    } catch (e) {
+      console.error('⚠️ Falha ao enviar conclusão no grupo:', e.message);
+    }
+  }
+}
+
 /**
  * Processamento interno para salvar logs de mensagens recebidas/criadas
  */
 async function processarMensagemEntrada(usuarioId, client, msg) {
   try {
-    // Evita processamento duplicado para a mesma mensagem (devido a múltiplos eventos message/message_create)
-    if (msg.id && msg.id.id) {
-      if (mensagensProcessadas.has(msg.id.id)) {
-        return;
-      }
-      mensagensProcessadas.add(msg.id.id);
+    if (!deveProcessarMensagemAgora(msg)) return;
 
-      podarIdsProcessados(mensagensProcessadas);
+    // Grupos: from = @g.us (recebidas) ou to = @g.us quando fromMe (enviadas pelo dono da sessão)
+    if (!ehMensagemDeGrupo(msg)) return;
+
+    let chat = await msg.getChat();
+    if (!chat?.isGroup) {
+      const groupJid = resolverIdGrupo(msg);
+      if (!groupJid) return;
+      chat = await client.getChatById(groupJid);
     }
+    if (!chat?.isGroup) return;
 
-    // Processa apenas mensagens vindas de grupos
-    if (msg.from.endsWith('@g.us')) {
-      const chat = await msg.getChat();
-      if (!chat.isGroup) return;
-
-      const groupId = chat.id._serialized;
-      const nomeGrupo = chat.name;
-      let participanteId = msg.author || msg.from;
+    const groupId = chat.id._serialized;
+    const nomeGrupo = chat.name;
+      let participanteId = resolverParticipanteId(msg, client);
 
       // Se for LID, mapeia para o número de celular real JID (@c.us) para manter compatibilidade total no banco
       if (participanteId && participanteId.endsWith('@lid')) {
@@ -524,14 +534,14 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
         }
       }
 
-      const corpo = msg.body || '';
-      console.log(`📥 [RECEBIDA] Grupo: "${nomeGrupo}", Membro: ${participanteId}, fromMe: ${msg.fromMe}, hasMedia: ${msg.hasMedia}, texto: "${corpo.substring(0, 50)}"`);
+      const corpo = (msg.body || '').trim();
+      const { cmd: comando, texto: corpoCmd } = parseComando(corpo);
+      console.log(`📥 [RECEBIDA] Grupo: "${nomeGrupo}", Membro: ${participanteId}, fromMe: ${msg.fromMe}, cmd: ${comando || '-'}, texto: "${corpo.substring(0, 50)}"`);
 
-      // Ignora mensagens do próprio bot
-      if (participanteId === client.info.wid._serialized) return;
+      const idPrivadoRemetente = obterIdPrivadoRemetente(msg, participanteId, client);
 
       // ─── COMANDOS DO BOT MULTI-TENANT (SaaS) ───
-      if (corpo.startsWith('/')) {
+      if (comando) {
         let eAdmin = msg.fromMe;
         if (!eAdmin) {
           try {
@@ -545,13 +555,13 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
         }
 
         // 1. Comando /ajuda
-        if (corpo === '/ajuda') {
-          const textoAjuda = `🤖 *Comandos do Bot de Gestão de Grupos SaaS:*\n\n` +
+        if (comando === '/ajuda') {
+          const textoAjuda = `🤖 *Comandos do Bot de Gestão de Grupos - NL Tecnologias:*\n\n` +
             `📊 *Gestão & Engajamento:* (Para Administradores)\n` +
             `• \`/fantasmas [limite] [pv|gp]\` - Lista membros com menos de [limite] mensagens (padrão: 3).\n` +
             `• \`/inativos [dias] [pv|gp]\` - Lista membros sem mensagens há [dias] dias (padrão: 30).\n` +
             `• \`/relatorio [dias] [limite]\` - Envia no privado um relatório em arquivo TXT completo.\n\n` +
-            `🚫 *Moderação:* (Apenas para o Dono do Bot)\n` +
+            `🚫 *Moderação:* (Administradores do grupo)\n` +
             `• \`/ban @membro\` - Remove o membro mencionado.\n` +
             `• \`/baninativo @membro\` - Remove o membro mencionado por inatividade.\n\n` +
             `💡 *Observação:* Se escolher o modo \`pv\`, a lista com as menções será enviada diretamente no seu privado para discrição!`;
@@ -559,10 +569,16 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
           return;
         }
 
-        // 2. Comandos de Ban / BanInativo (Apenas dono do bot / msg.fromMe)
-        if (corpo.startsWith('/ban ') || corpo.startsWith('/baninativo ')) {
-          if (!msg.fromMe) {
-            console.log(`⛔ Comando /ban negado para ${participanteId} no grupo "${nomeGrupo}" (não é o dono do bot)`);
+        // 2. Comandos de Ban / BanInativo (Administradores do grupo ou dono da sessão)
+        if (comando === '/ban' || comando === '/baninativo') {
+          if (!eAdmin) {
+            const contaBot = client.info?.wid?.user || 'desconhecida';
+            await chat.sendMessage(
+              `⚠️ *Sem permissão:* Apenas administradores deste grupo podem usar \`${comando}\`.\n\n` +
+              `📱 Conta conectada ao bot no painel: *${contaBot}*\n` +
+              `Se você é o dono do bot, envie o comando com esse número no WhatsApp.`
+            );
+            console.log(`⛔ Comando ${comando} negado para ${participanteId} no grupo "${nomeGrupo}" (não é admin)`);
             return;
           }
 
@@ -576,7 +592,7 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
           if (msg.mentionedIds && msg.mentionedIds.length > 0) {
             targetId = msg.mentionedIds[0];
           } else {
-            const partes = corpo.split(' ');
+            const partes = corpoCmd.split(/\s+/);
             const numero = partes[1] ? partes[1].replace(/\D/g, '') : '';
             if (numero) {
               targetId = `${numero}@c.us`;
@@ -584,7 +600,7 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
           }
 
           if (!targetId) {
-            const cmdName = corpo.startsWith('/baninativo') ? '/baninativo' : '/ban';
+            const cmdName = comando === '/baninativo' ? '/baninativo' : '/ban';
             await chat.sendMessage(`⚠️ *Uso correto:* \`${cmdName} @membro\` ou \`${cmdName} 5511999999999\``);
             return;
           }
@@ -593,7 +609,7 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             const contatoAlvo = await client.getContactById(targetId);
             const realId = contatoAlvo.id._serialized;
             await chat.removeParticipants([realId]);
-            const msgBan = corpo.startsWith('/baninativo')
+            const msgBan = comando === '/baninativo'
               ? `🚫 @${contatoAlvo.id.user} foi removido do grupo por inatividade prolongada e falta de interação.`
               : `🚫 @${contatoAlvo.id.user} foi removido do grupo por violação das regras estabelecidas.`;
             await chat.sendMessage(msgBan, { mentions: [realId] });
@@ -605,13 +621,13 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
         }
 
         // 3. Comando /fantasmas [limite] [pv|gp] (Admins e Dono)
-        if (corpo.split(' ')[0] === '/fantasmas') {
+        if (comando === '/fantasmas') {
           if (!eAdmin) {
             await chat.sendMessage("⚠️ *Erro:* Apenas administradores do grupo ou o dono do bot podem usar este comando!");
             return;
           }
 
-          const partes = corpo.split(' ');
+          const partes = corpoCmd.split(/\s+/);
           const limite = partes[1] !== undefined && !isNaN(parseInt(partes[1])) ? parseInt(partes[1]) : 3;
           const modo = partes[2] ? partes[2].toLowerCase() : '';
           const forcarPV = modo === 'pv';
@@ -641,11 +657,14 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             }
 
             if (enviarParaPV) {
-              await msgFeedback.edit(`👻 *Membros Fantasmas:* Identifiquei *${fantasmas.length}* membros com baixíssima interação (menos de ${limite} mensagens).\n\nEnviei a lista com as menções no seu privado! 😉`);
               const cabecalhoPV = `📊 *Membros com Pouca Interação — Grupo "${nomeGrupo}"*\n`;
               const corpoPV = `Estes membros enviaram menos de ${limite} mensagens:\n\n${listaTexto}\nTotal: ${fantasmas.length} fantasma(s).`;
-              const senderId = msg.author || msg.from;
-              await client.sendMessage(senderId, cabecalhoPV + corpoPV, { mentions });
+              await client.sendMessage(idPrivadoRemetente, cabecalhoPV + corpoPV, { mentions });
+              await concluirMensagemAguarde(
+                msgFeedback,
+                chat,
+                `✅ *Concluído* — ${fantasmas.length} fantasma(s) analisado(s). Lista enviada no privado.`
+              );
             } else {
               const cabecalhoGrupo = `👻 *Membros com Baixa Interação (Menos de ${limite} mensagens):*\n\n`;
               const rodapeGrupo = `\n📊 Total: ${fantasmas.length} fantasma(s) detectado(s).`;
@@ -653,19 +672,19 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             }
           } catch (err) {
             console.error('❌ Erro no comando /fantasmas:', err.message);
-            await msgFeedback.edit(`⚠️ *Erro ao analisar fantasmas:* ${err.message}`);
+            await concluirMensagemAguarde(msgFeedback, chat, `⚠️ *Erro ao analisar fantasmas:* ${err.message}`);
           }
           return;
         }
 
         // 4. Comando /inativos [dias] [pv|gp] (Admins e Dono)
-        if (corpo.split(' ')[0] === '/inativos') {
+        if (comando === '/inativos') {
           if (!eAdmin) {
             await chat.sendMessage("⚠️ *Erro:* Apenas administradores do grupo ou o dono do bot podem usar este comando!");
             return;
           }
 
-          const partes = corpo.split(' ');
+          const partes = corpoCmd.split(/\s+/);
           const dias = parseInt(partes[1]) || 30;
           const modo = partes[2] ? partes[2].toLowerCase() : '';
           const forcarPV = modo === 'pv';
@@ -696,11 +715,14 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             }
 
             if (enviarParaPV) {
-              await msgFeedback.edit(`📋 *Membros Inativos:* Identifiquei *${inativos.length}* membros inativos há ${dias} dias.\n\nEnviei a lista detalhada com as marcações diretamente no seu privado! 😉`);
               const cabecalhoPV = `📊 *Relatório de Inativos — Grupo "${nomeGrupo}"*\n`;
               const corpoPV = `Aqui está a lista dos membros inativos há ${dias} dias:\n\n${listaTexto}\nTotal: ${inativos.length} inativo(s).`;
-              const senderId = msg.author || msg.from;
-              await client.sendMessage(senderId, cabecalhoPV + corpoPV, { mentions });
+              await client.sendMessage(idPrivadoRemetente, cabecalhoPV + corpoPV, { mentions });
+              await concluirMensagemAguarde(
+                msgFeedback,
+                chat,
+                `✅ *Concluído* — ${inativos.length} inativo(s) analisado(s). Lista enviada no privado.`
+              );
             } else {
               const cabecalhoGrupo = `📋 *Membros inativos há ${dias} dias:*\n\n`;
               const rodapeGrupo = `\n📊 Total: ${inativos.length} membro(s) inativo(s)`;
@@ -708,19 +730,19 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             }
           } catch (err) {
             console.error('❌ Erro no comando /inativos:', err.message);
-            await msgFeedback.edit(`⚠️ *Erro ao analisar inativos:* ${err.message}`);
+            await concluirMensagemAguarde(msgFeedback, chat, `⚠️ *Erro ao analisar inativos:* ${err.message}`);
           }
           return;
         }
 
         // 5. Comando /relatorio [dias] [limite] (Admins e Dono)
-        if (corpo.split(' ')[0] === '/relatorio') {
+        if (comando === '/relatorio') {
           if (!eAdmin) {
             await chat.sendMessage("⚠️ *Erro:* Apenas administradores do grupo ou o dono do bot podem usar este comando!");
             return;
           }
 
-          const partes = corpo.split(' ');
+          const partes = corpoCmd.split(/\s+/);
           const diasInatividade = parseInt(partes[1]) || 30;
           const limiteFantasmas = parseInt(partes[2]) || 3;
 
@@ -796,17 +818,19 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             console.log(`💾 Relatório TXT gerado localmente em: ${caminhoLocal}`);
 
             const media = MessageMedia.fromFilePath(caminhoLocal);
-            const senderId = msg.author || msg.from;
-
-            await client.sendMessage(senderId, media, {
+            await client.sendMessage(idPrivadoRemetente, media, {
               caption: `📊 *Relatório de Engajamento — Grupo "${nomeGrupo}"*\n\nArquivo gerado de forma 100% segura.\n\n📂 *Arquivo:* \`${nomeArquivo}\``,
               sendMediaAsDocument: true
             });
 
-            await msgFeedback.edit(`✅ *Relatório gerado com sucesso!* Enviei o arquivo no seu privado. 📂🔒`);
+            await concluirMensagemAguarde(
+              msgFeedback,
+              chat,
+              '✅ *Concluído* — relatório gerado e enviado no privado.'
+            );
           } catch (err) {
             console.error('❌ Erro ao gerar/enviar relatório:', err.message);
-            await msgFeedback.edit(`⚠️ *Erro crítico ao gerar o relatório:* ${err.message}`);
+            await concluirMensagemAguarde(msgFeedback, chat, `⚠️ *Erro ao gerar relatório:* ${err.message}`);
           }
           return;
         }
@@ -832,7 +856,7 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
         nomeGrupoLimpo.includes('espada_rua_da_estacao') ||
         nomeGrupoLimpo.includes('espada');
 
-      if (isGrupoModerado && !msg.fromMe && !corpo.startsWith('/')) {
+      if (isGrupoModerado && !msg.fromMe && !comando) {
         let eAdmin = false;
         try {
           const participante = chat.participants.find(p => p.id._serialized === participanteId);
@@ -1101,14 +1125,17 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
         }
       }
 
-      // Obtém o nome de exibição do remetente
+      // Não contabiliza mensagens da conta conectada ao bot (evita poluir estatísticas)
+      if (participanteId === client.info.wid._serialized) {
+        return;
+      }
+
       const nomeParticipante = msg._data.notifyName || participanteId.split('@')[0];
 
       await database.registrarMensagem(usuarioId, groupId, nomeGrupo, participanteId, nomeParticipante);
 
-      // Notifica o painel web para atualizar os gráficos em tempo real se o cliente estiver conectado
-      io.to(usuarioId).emit('nova_mensagem', { groupId });
-    }
+    // Notifica o painel web para atualizar os gráficos em tempo real se o cliente estiver conectado
+    io.to(usuarioId).emit('nova_mensagem', { groupId });
   } catch (err) {
     console.error('⚠️ Erro ao registrar atividade no painel:', err.message);
   }

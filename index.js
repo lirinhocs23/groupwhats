@@ -3,7 +3,15 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs-extra');
 const dayjs = require('dayjs');
-const { avaliarTexto } = require('./src/moderationRules');
+const {
+  avaliarTexto,
+  obterIdPrivadoRemetente,
+  resolverParticipanteId,
+  ehMensagemDeGrupo,
+  resolverIdGrupo,
+  deveProcessarMensagemAgora,
+  parseComando
+} = require('./src/moderationRules');
 
 // Caminho do arquivo de atividade
 const ATIVIDADE_PATH = './atividade.json';
@@ -108,18 +116,24 @@ async function processarMensagem(msg, eventoOrigem) {
     // Ignora mensagens sem conteúdo (status, mídia sem legenda, etc)
     const corpo = msg.body || '';
 
-    const chat = await msg.getChat();
+    if (!ehMensagemDeGrupo(msg)) return;
+
+    let chat = await msg.getChat();
+    if (!chat?.isGroup) {
+      const groupJid = resolverIdGrupo(msg);
+      if (!groupJid) return;
+      chat = await client.getChatById(groupJid);
+    }
+    if (!chat?.isGroup) return;
 
     // Log bruto para debug
     console.log(`🔔 [${eventoOrigem}] from: ${msg.from} | to: ${msg.to} | author: ${msg.author || 'N/A'} | grupo: ${chat.isGroup}`);
 
-    // Verifica se a mensagem é de um grupo
-    if (!chat.isGroup) return;
-
     const nomeGrupo = chat.name;
-    const userId = msg.author || msg.from;
+    const userId = resolverParticipanteId(msg, client);
+    const idPrivadoRemetente = obterIdPrivadoRemetente(msg, userId, client);
 
-    console.log(`💬 Mensagem no grupo "${nomeGrupo}" de ${userId}: "${corpo.substring(0, 50)}"`);
+    console.log(`💬 Mensagem no grupo "${nomeGrupo}" de ${userId} (pv: ${idPrivadoRemetente}): "${corpo.substring(0, 50)}"`);
 
     // ─── MODERADOR AUTOMÁTICO ANTI-SPAM / ANÚNCIOS ───
     // Moderação ativa APENAS para o grupo "Espada_ruadaestacao". Outros grupos têm livre trânsito e não são moderados.
@@ -327,6 +341,8 @@ async function processarMensagem(msg, eventoOrigem) {
 
       console.log(`👻 Comando /fantasmas (limite: ${limite}, modo: ${modo || 'auto'}) recebido no grupo "${nomeGrupo}"`);
 
+      const msgAguarde = await chat.sendMessage('⏳ *Aguarde:* Analisando membros fantasmas...');
+
       const participantes = chat.participants;
       const groupId = chat.id._serialized;
       const dadosGrupo = (atividade[groupId] && atividade[groupId].membros) || {};
@@ -358,7 +374,11 @@ async function processarMensagem(msg, eventoOrigem) {
       }
 
       if (fantasmas.length === 0) {
-        await chat.sendMessage(`✅ Todos os membros comuns têm mais de ${limite} mensagens! Nenhum fantasma detectado.`);
+        try {
+          await msgAguarde.edit(`✅ Todos os membros comuns têm mais de ${limite} mensagens! Nenhum fantasma detectado.`);
+        } catch {
+          await chat.sendMessage(`✅ Todos os membros comuns têm mais de ${limite} mensagens! Nenhum fantasma detectado.`);
+        }
         return;
       }
 
@@ -381,21 +401,26 @@ async function processarMensagem(msg, eventoOrigem) {
       }
 
       if (enviarParaPV) {
-        // Envia resumo no grupo
-        await chat.sendMessage(`👻 *Membros Fantasmas:* Identifiquei *${fantasmas.length}* membros com baixíssima interação (menos de ${limite} mensagens).\n\nEnviei a lista com as menções no seu privado para manter a discrição! 😉`);
-
-        // Envia a lista completa no privado do admin
         const cabecalhoPV = `📊 *Membros com Pouca Interação — Grupo "${nomeGrupo}"*\n`;
         const corpoPV = `Estes membros enviaram menos de ${limite} mensagens desde o início do rastreamento:\n\n${listaTexto}\nTotal: ${fantasmas.length} fantasma(s).`;
 
-        await client.sendMessage(userId, cabecalhoPV + corpoPV, { mentions });
-        console.log(`📩 Relatório de fantasmas enviado para o privado de ${userId}`);
+        await client.sendMessage(idPrivadoRemetente, cabecalhoPV + corpoPV, { mentions });
+        console.log(`📩 Relatório de fantasmas enviado para o privado de ${idPrivadoRemetente}`);
+
+        try {
+          await msgAguarde.edit(`✅ *Concluído* — ${fantasmas.length} fantasma(s) analisado(s). Lista enviada no privado.`);
+        } catch {
+          await chat.sendMessage(`✅ *Concluído* — ${fantasmas.length} fantasma(s) analisado(s). Lista enviada no privado.`);
+        }
       } else {
-        // Envia diretamente no grupo
         const cabecalhoGrupo = `👻 *Membros com Baixa Interação (Menos de ${limite} mensagens):*\n\n`;
         const rodapeGrupo = `\n📊 Total: ${fantasmas.length} fantasma(s) detectado(s).`;
 
-        await chat.sendMessage(cabecalhoGrupo + listaTexto + rodapeGrupo, { mentions });
+        try {
+          await msgAguarde.edit(cabecalhoGrupo + listaTexto + rodapeGrupo, { mentions });
+        } catch {
+          await chat.sendMessage(cabecalhoGrupo + listaTexto + rodapeGrupo, { mentions });
+        }
         console.log(`💬 Relatório de fantasmas enviado no grupo "${nomeGrupo}"`);
       }
 
@@ -437,6 +462,8 @@ async function processarMensagem(msg, eventoOrigem) {
       const forcarGrupo = modo === 'gp';
 
       console.log(`📋 Comando /inativos ${dias} (modo: ${modo || 'auto'}) recebido no grupo "${nomeGrupo}" (por admin)`);
+
+      const msgAguardeInativos = await chat.sendMessage(`⏳ *Aguarde:* Analisando membros inativos há ${dias} dias...`);
 
       const participantes = chat.participants;
       const agora = dayjs();
@@ -487,7 +514,11 @@ async function processarMensagem(msg, eventoOrigem) {
       }
 
       if (inativos.length === 0) {
-        await chat.sendMessage(`✅ Nenhum membro inativo há ${dias} dias neste grupo!`);
+        try {
+          await msgAguardeInativos.edit(`✅ Nenhum membro inativo há ${dias} dias neste grupo!`);
+        } catch {
+          await chat.sendMessage(`✅ Nenhum membro inativo há ${dias} dias neste grupo!`);
+        }
         return;
       }
 
@@ -511,21 +542,26 @@ async function processarMensagem(msg, eventoOrigem) {
       }
 
       if (enviarParaPV) {
-        // Envia resumo no grupo
-        await chat.sendMessage(`📋 *Membros Inativos:* Identifiquei *${inativos.length}* membros inativos há ${dias} dias.\n\nEnviei a lista detalhada com as marcações diretamente no seu privado para não poluir o grupo! 😉`);
-
-        // Envia a lista completa no privado do admin
         const cabecalhoPV = `📊 *Relatório de Inativos — Grupo "${nomeGrupo}"*\n`;
         const corpoPV = `Aqui está a lista dos membros inativos há ${dias} dias:\n\n${listaTexto}\nTotal: ${inativos.length} inativo(s).`;
 
-        await client.sendMessage(userId, cabecalhoPV + corpoPV, { mentions });
-        console.log(`📩 Relatório enviado com sucesso para o privado do admin ${userId}`);
+        await client.sendMessage(idPrivadoRemetente, cabecalhoPV + corpoPV, { mentions });
+        console.log(`📩 Relatório enviado com sucesso para o privado do admin ${idPrivadoRemetente}`);
+
+        try {
+          await msgAguardeInativos.edit(`✅ *Concluído* — ${inativos.length} inativo(s) analisado(s). Lista enviada no privado.`);
+        } catch {
+          await chat.sendMessage(`✅ *Concluído* — ${inativos.length} inativo(s) analisado(s). Lista enviada no privado.`);
+        }
       } else {
-        // Envia diretamente no grupo com menções reais
         const cabecalhoGrupo = `📋 *Membros inativos há ${dias} dias:*\n\n`;
         const rodapeGrupo = `\n📊 Total: ${inativos.length} membro(s) inativo(s)`;
 
-        await chat.sendMessage(cabecalhoGrupo + listaTexto + rodapeGrupo, { mentions });
+        try {
+          await msgAguardeInativos.edit(cabecalhoGrupo + listaTexto + rodapeGrupo, { mentions });
+        } catch {
+          await chat.sendMessage(cabecalhoGrupo + listaTexto + rodapeGrupo, { mentions });
+        }
         console.log(`💬 Relatório enviado com sucesso no grupo "${nomeGrupo}"`);
       }
 
@@ -702,14 +738,14 @@ async function processarMensagem(msg, eventoOrigem) {
         const media = MessageMedia.fromFilePath(caminhoLocal);
 
         // Envia para o privado do admin que disparou o comando
-        await client.sendMessage(userId, media, {
+        await client.sendMessage(idPrivadoRemetente, media, {
           caption: `📊 *Relatório de Engajamento — Grupo "${nomeGrupo}"*\n\nArquivo gerado de forma 100% segura sem gerar spam.\n\n📂 *Arquivo:* \`${nomeArquivo}\``,
           sendMediaAsDocument: true
         });
 
         // Edita a mensagem do grupo informando o sucesso
         await msgFeedback.edit(`✅ *Relatório gerado com sucesso!* 📂🔒`);
-        console.log(`📩 Relatório em arquivo enviado no privado de ${userId}`);
+        console.log(`📩 Relatório em arquivo enviado no privado de ${idPrivadoRemetente}`);
 
       } catch (err) {
         console.error('❌ Erro ao gerar/enviar relatório:', err.message);
@@ -760,20 +796,8 @@ async function processarMensagem(msg, eventoOrigem) {
   }
 }
 
-// Controle para evitar processar a mesma mensagem 2x (ambos eventos podem disparar)
-const mensagensProcessadas = new Set();
-
-client.on('message', (msg) => {
-  if (mensagensProcessadas.has(msg.id._serialized)) return;
-  mensagensProcessadas.add(msg.id._serialized);
-  podarIdsProcessados(mensagensProcessadas);
-  processarMensagem(msg, 'message');
-});
-
 client.on('message_create', (msg) => {
-  if (mensagensProcessadas.has(msg.id._serialized)) return;
-  mensagensProcessadas.add(msg.id._serialized);
-  podarIdsProcessados(mensagensProcessadas);
+  if (!deveProcessarMensagemAgora(msg)) return;
   processarMensagem(msg, 'message_create');
 });
 

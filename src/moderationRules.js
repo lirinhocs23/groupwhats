@@ -327,9 +327,95 @@ const PROMPT_REGRAS_GRUPO = `Regras do grupo (regras.md):
 Sempre PERMITIR: gírias como "morreu de rir", conversas do dia a dia como "vou comprar pão", anúncios de espadas/acessórios.
 Bloquear SIM apenas: spam comercial claro, apostas, rifas, violência/acidente real, ofensas graves.`;
 
+/** Controle global de duplicata message vs message_create (evita 2º evento com corpo ser descartado) */
+const mensagensVistas = new Map();
+
+/**
+ * ID do remetente em grupo. Com fromMe, author vem vazio e from é o JID do grupo.
+ */
+function resolverParticipanteId(msg, client) {
+  if (msg.fromMe && client?.info?.wid?._serialized) {
+    return client.info.wid._serialized;
+  }
+  return msg.author || msg.from;
+}
+
+/**
+ * ID correto para enviar DM (PV) a quem disparou o comando no grupo.
+ */
+function obterIdPrivadoRemetente(msg, participanteId, client) {
+  if (msg.fromMe && client?.info?.wid?._serialized) {
+    return client.info.wid._serialized;
+  }
+  if (participanteId && !participanteId.endsWith('@g.us')) {
+    return participanteId;
+  }
+  if (msg.author && !String(msg.author).endsWith('@g.us')) {
+    return msg.author;
+  }
+  return client?.info?.wid?._serialized || participanteId;
+}
+
+/**
+ * Primeiro evento (message) às vezes chega sem body; message_create traz o texto.
+ * Retorna true se deve processar agora.
+ */
+function deveProcessarMensagemAgora(msg) {
+  const key = msg.id?._serialized || msg.id?.id;
+  if (!key) return false;
+
+  const temConteudo = !!(msg.body || '').trim() || msg.hasMedia;
+  const estado = mensagensVistas.get(key);
+
+  if (estado === 'done') return false;
+
+  if (!temConteudo) {
+    if (!estado) mensagensVistas.set(key, 'pending');
+    return false;
+  }
+
+  mensagensVistas.set(key, 'done');
+  if (mensagensVistas.size > 2000) {
+    const manter = [...mensagensVistas.keys()].slice(-1000);
+    mensagensVistas.clear();
+    manter.forEach((k) => mensagensVistas.set(k, 'done'));
+  }
+  return true;
+}
+
+/**
+ * Em mensagens enviadas por você (fromMe), msg.from é seu @c.us e msg.to é o grupo @g.us.
+ * Em mensagens de outros, msg.from é o grupo.
+ */
+function resolverIdGrupo(msg) {
+  const from = msg.from ? String(msg.from) : '';
+  const to = msg.to ? String(msg.to) : '';
+  if (from.endsWith('@g.us')) return from;
+  if (msg.fromMe && to.endsWith('@g.us')) return to;
+  return null;
+}
+
+function ehMensagemDeGrupo(msg) {
+  return !!resolverIdGrupo(msg);
+}
+
+/** Normaliza comando: "/ajuda " -> { cmd: '/ajuda', texto: '...' } */
+function parseComando(corpo) {
+  const texto = (corpo || '').trim();
+  if (!texto.startsWith('/')) return { cmd: '', texto: '' };
+  const partes = texto.split(/\s+/);
+  return { cmd: partes[0].toLowerCase(), texto, partes };
+}
+
 module.exports = {
   FRASES_PERMITIDAS,
   normalizarTextoParaFiltro,
   avaliarTexto,
-  PROMPT_REGRAS_GRUPO
+  PROMPT_REGRAS_GRUPO,
+  resolverParticipanteId,
+  resolverIdGrupo,
+  ehMensagemDeGrupo,
+  obterIdPrivadoRemetente,
+  deveProcessarMensagemAgora,
+  parseComando
 };

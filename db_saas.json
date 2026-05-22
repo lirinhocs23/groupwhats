@@ -14,7 +14,7 @@
       "status": "conectado",
       "numero": "557398266511",
       "createdAt": "2026-05-18T20:49:04.101Z",
-      "updatedAt": "2026-05-22T14:33:38.429Z"
+      "updatedAt": "2026-05-22T15:40:55.282Z"
     },
     {
       "usuarioId": "usr_1779453323831",
@@ -2826,8 +2826,8 @@
             "nome": "🧑‍🔧 izanqer"
           },
           "557391214825@c.us": {
-            "totalMensagens": 0,
-            "ultimaMensagem": "",
+            "totalMensagens": 1,
+            "ultimaMensagem": "2026-05-22T15:40:40.831Z",
             "nome": "Lirinho Coins"
           },
           "557398266511@c.us": {
@@ -2906,8 +2906,8 @@
             "nome": "🚚🚚"
           },
           "557581370031@c.us": {
-            "totalMensagens": 0,
-            "ultimaMensagem": "",
+            "totalMensagens": 7,
+            "ultimaMensagem": "2026-05-22T15:42:39.474Z",
             "nome": "Abençoado Por Deus"
           },
           "557582457525@c.us": {
@@ -2926,8 +2926,8 @@
             "nome": "Alan Oliveira "
           },
           "557588692045@c.us": {
-            "totalMensagens": 5,
-            "ultimaMensagem": "2026-05-18T22:09:42.954Z",
+            "totalMensagens": 7,
+            "ultimaMensagem": "2026-05-22T15:43:01.674Z",
             "nome": "Albert"
           },
           "557581090213@c.us": {
@@ -2971,8 +2971,8 @@
             "nome": "Bruno Rocha"
           },
           "557196572623@c.us": {
-            "totalMensagens": 8,
-            "ultimaMensagem": "2026-05-18T21:33:32.899Z",
+            "totalMensagens": 9,
+            "ultimaMensagem": "2026-05-22T15:36:21.441Z",
             "nome": "Caiqu🍃"
           },
           "557581765967@c.us": {
@@ -2991,8 +2991,8 @@
             "nome": "Deni Sousa ⚔️🛡️⚔️"
           },
           "557591690662@c.us": {
-            "totalMensagens": 0,
-            "ultimaMensagem": "",
+            "totalMensagens": 3,
+            "ultimaMensagem": "2026-05-22T15:20:43.508Z",
             "nome": "Djavan"
           },
           "557981229266@c.us": {
@@ -3161,8 +3161,8 @@
             "nome": "Netinho Sntss🍃"
           },
           "557583107026@c.us": {
-            "totalMensagens": 3,
-            "ultimaMensagem": "2026-05-18T21:28:40.556Z",
+            "totalMensagens": 4,
+            "ultimaMensagem": "2026-05-22T15:03:58.647Z",
             "nome": "Pablo Souza"
           },
           "557182842830@c.us": {
@@ -3196,8 +3196,8 @@
             "nome": "ralphmariliabatista"
           },
           "557599202211@c.us": {
-            "totalMensagens": 0,
-            "ultimaMensagem": "",
+            "totalMensagens": 1,
+            "ultimaMensagem": "2026-05-22T15:43:20.171Z",
             "nome": "Raphael"
           },
           "557182562531@c.us": {
@@ -3241,8 +3241,8 @@
             "nome": "Sena"
           },
           "557587071401@c.us": {
-            "totalMensagens": 2,
-            "ultimaMensagem": "2026-05-22T14:48:58.541Z",
+            "totalMensagens": 3,
+            "ultimaMensagem": "2026-05-22T15:22:25.351Z",
             "nome": "Sergio"
           },
           "557592323671@c.us": {
@@ -3271,8 +3271,8 @@
             "nome": "Thii🍃"
           },
           "557498082770@c.us": {
-            "totalMensagens": 0,
-            "ultimaMensagem": "",
+            "totalMensagens": 1,
+            "ultimaMensagem": "2026-05-22T14:52:52.678Z",
             "nome": "Uesllen"
           },
           "557598632329@c.us": {
@@ -3467,9 +3467,7 @@
             "nome": "NL Tecnologias"
           }
         },
-        "advertencias": {
-          "557391214825@c.us": 1
-        },
+        "advertencias": {},
         "moderacaoAtiva": true,
         "termosProibidos": [],
         "linksPermitidos": [
