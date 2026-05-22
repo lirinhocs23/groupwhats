@@ -55,6 +55,12 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Endpoint to retrieve in‑memory debug logs for the SaaS panel
+app.get('/api/debug-logs', (req, res) => {
+  // Return the latest logs (up to 500 entries) as JSON
+  res.json({ logs: debugLogs });
+});
+
 // Mapa para manter as instâncias ativas do WhatsApp na memória
 // Estrutura: { [usuarioId]: { client: Client, status: string, qr: string, numero: string } }
 const sessoesAtivas = {};
@@ -288,10 +294,27 @@ async function deletarMensagemComFila(msg) {
 // Restores previous WhatsApp sessions on startup (basic implementation)
 async function restaurarSessoesAnteriores() {
   console.log('🔄 Restaurando sessões anteriores...');
-  // Here you could load saved sessions from the database and re‑initialize them.
-  // For now we just log to avoid the ReferenceError.
+  const path = require('path');
+  const fs = require('fs-extra');
+  const dbPath = path.join(__dirname, 'db_saas.json');
+  try {
+    const data = await fs.readJson(dbPath);
+    if (Array.isArray(data.sessoes)) {
+      for (const sess of data.sessoes) {
+        // Resetar status para evitar sessões pendentes ao iniciar
+        sess.status = 'desconectado';
+        sess.numero = '';
+        sess.updatedAt = new Date().toISOString();
+      }
+      await fs.writeJson(dbPath, data, { spaces: 2 });
+      console.log(`✅ Sessões resetadas para 'desconectado' (${data.sessoes.length})`);
+    } else {
+      console.log('⚠️ Nenhuma sessão encontrada no banco de dados.');
+    }
+  } catch (err) {
+    console.error('❌ Erro ao restaurar sessões anteriores:', err.message);
+  }
 }
-
 
 // Socket.io event handlers for panel actions
 io.on('connection', (socket) => {
