@@ -4,7 +4,7 @@
   "description": "Bot WhatsApp - Verificador de membros inativos em grupos",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node server.js"
   },
   "keywords": [
     "whatsapp",
