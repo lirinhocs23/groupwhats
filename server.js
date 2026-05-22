@@ -349,6 +349,47 @@ io.on('connection', (socket) => {
   });
 });
 
+// -------------------------------------------------
+// API Endpoints (JSON)
+// -------------------------------------------------
+/**
+ * GET /api/grupos?usuarioId=usr_1
+ * Returns list of groups for the user.
+ */
+app.get('/api/grupos', async (req, res) => {
+  const { usuarioId } = req.query;
+  if (!usuarioId) return res.status(400).json({ error: 'usuarioId required' });
+  try {
+    const grupos = await database.obterGrupos(usuarioId);
+    return res.json({ grupos });
+  } catch (e) {
+    console.error('❌ Erro ao buscar grupos:', e);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * GET /api/atividade?usuarioId=usr_1&groupId=xxxx@g.us
+ * Returns activity statistics for a specific group.
+ */
+app.get('/api/atividade', async (req, res) => {
+  const { usuarioId, groupId } = req.query;
+  if (!usuarioId || !groupId) return res.status(400).json({ error: 'usuarioId & groupId required' });
+  try {
+    const stats = await database.obterEstatisticasGrupo(usuarioId, groupId);
+    return res.json(stats);
+  } catch (e) {
+    console.error('❌ Erro ao buscar estatísticas do grupo:', e);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// -------------------------------------------------
+// End of API Endpoints
+// -------------------------------------------------
+
+
+
 // Inicialização do servidor
 server.listen(PORT, async () => {
   console.log(`====================================================`);
