@@ -478,6 +478,38 @@ async function deletarMensagemComFila(msg) {
   processarFilaDelecao();
 }
 
+function erroSessaoFechada(err) {
+  const msg = (err && err.message) ? String(err.message) : String(err || '');
+  return (
+    msg.includes('Target closed') ||
+    msg.includes('detached Frame') ||
+    msg.includes('Protocol error (Runtime.callFunctionOn)')
+  );
+}
+
+async function limparRelatoriosAntigos(horas = 8) {
+  const dir = path.join(__dirname, 'relatorios');
+  const agora = Date.now();
+  const limiteMs = Math.max(1, horas) * 60 * 60 * 1000;
+
+  try {
+    if (!fs.existsSync(dir)) return;
+    const itens = fs.readdirSync(dir);
+    for (const nome of itens) {
+      const p = path.join(dir, nome);
+      try {
+        const st = fs.statSync(p);
+        if (!st.isFile()) continue;
+        if (agora - st.mtimeMs > limiteMs) fs.unlinkSync(p);
+      } catch (e) {
+        console.warn('⚠️ Falha ao podar relatório antigo:', nome, e.message);
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ Falha ao limpar relatorios antigos:', err.message);
+  }
+}
+
 /** Atualiza a mensagem "Aguarde..." após enviar resultado no PV (com fallback se edit falhar). */
 async function concluirMensagemAguarde(msgFeedback, chat, texto) {
   if (!msgFeedback) {
@@ -823,6 +855,10 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
               sendMediaAsDocument: true
             });
 
+            // Libera espaço no volume (Railway free) — remove arquivo e poda relatórios antigos
+            try { await fs.unlink(caminhoLocal); } catch (e) { console.warn('⚠️ Falha ao apagar relatório local:', e.message); }
+            await limparRelatoriosAntigos(8);
+
             await concluirMensagemAguarde(
               msgFeedback,
               chat,
@@ -1138,6 +1174,14 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
     io.to(usuarioId).emit('nova_mensagem', { groupId });
   } catch (err) {
     console.error('⚠️ Erro ao registrar atividade no painel:', err.message);
+    // Se o navegador do WhatsApp caiu, encerra a sessão para parar o loop de chamadas em frame/target fechado
+    if (erroSessaoFechada(err)) {
+      try {
+        await encerrarSessao(usuarioId, false);
+      } catch (e) {
+        console.error('⚠️ Falha ao encerrar sessão após queda do navegador:', e.message);
+      }
+    }
   }
 }
 
@@ -1145,6 +1189,20 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
 
 async function restaurarSessoesAnteriores() {
   try {
+    // Evita volume lotado no Railway por acúmulo de relatórios
+    await limparRelatoriosAntigos(8);
+
+    // Podagem do db_saas.json: remove "0 mensagens" antigos e trunca nomes longos
+    try {
+      const r = await database.podarBanco({
+        zeroMsgHoras: parseInt(process.env.DB_PRUNE_ZERO_HOURS || '24', 10),
+        maxNome: parseInt(process.env.DB_PRUNE_MAX_NAME || '60', 10)
+      });
+      console.log(`🧹 Podagem do banco concluída: removidos=${r.removidos}, nomesTruncados=${r.nomesTruncados}`);
+    } catch (e) {
+      console.warn('⚠️ Falha na podagem do banco:', e.message);
+    }
+
     const db = await database.inicializarDB();
     const dbCompleto = await database.buscarUsuario('admin', 'admin'); // Apenas garante inicialização
 
@@ -1233,6 +1291,13 @@ app.get('/api/groups', async (req, res) => {
         }
       } catch (e) {
         console.error('⚠️ Falha ao sincronizar grupos na rota de API:', e.message);
+        if (erroSessaoFechada(e)) {
+          try {
+            await encerrarSessao(usuarioId, false);
+          } catch (err) {
+            console.error('⚠️ Falha ao encerrar sessão após erro de sync groups:', err.message);
+          }
+        }
       }
     }
 
@@ -1268,6 +1333,13 @@ app.get('/api/stats/:groupId', async (req, res) => {
         }
       } catch (e) {
         console.error('⚠️ Falha ao buscar participantes/mensagens do WhatsApp:', e.message);
+        if (erroSessaoFechada(e)) {
+          try {
+            await encerrarSessao(usuarioId, false);
+          } catch (err) {
+            console.error('⚠️ Falha ao encerrar sessão após erro de stats:', err.message);
+          }
+        }
       }
     }
 

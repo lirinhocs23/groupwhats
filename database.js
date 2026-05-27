@@ -140,13 +140,15 @@ async function registrarMensagem(usuarioId, groupId, nomeGrupo, participanteId, 
     grupo.membros[participanteId] = {
       totalMensagens: 0,
       ultimaMensagem: '',
-      nome: nomeParticipante || participanteId.split('@')[0]
+      nome: nomeParticipante || participanteId.split('@')[0],
+      firstSeen: new Date().toISOString()
     };
   }
 
   const membro = grupo.membros[participanteId];
   membro.totalMensagens += 1;
   membro.ultimaMensagem = new Date().toISOString();
+  if (!membro.firstSeen) membro.firstSeen = membro.ultimaMensagem;
   
   // Atualiza o nome apenas se o atual for apenas o número de telefone (ainda não resolvido)
   const numeroTelefone = participanteId.split('@')[0];
@@ -156,6 +158,55 @@ async function registrarMensagem(usuarioId, groupId, nomeGrupo, participanteId, 
   }
 
   await gravarDB(db);
+}
+
+/**
+ * Podagem para reduzir tamanho do db_saas.json (Railway free volume).
+ * - Remove membros com 0 mensagens após N horas (firstSeen antigo e sem ultimaMensagem)
+ * - Trunca nomes muito longos (emojis/decorações) para reduzir JSON
+ * - Mantém membros com advertências mesmo se 0 msgs
+ */
+async function podarBanco({ zeroMsgHoras = 24, maxNome = 60 } = {}) {
+  const db = await lerDB();
+  const agora = Date.now();
+  const limiteZeroMs = Math.max(1, zeroMsgHoras) * 60 * 60 * 1000;
+
+  let removidos = 0;
+  let nomesTruncados = 0;
+
+  const atividade = db.atividade || {};
+  for (const [usuarioId, grupos] of Object.entries(atividade)) {
+    if (!grupos) continue;
+    for (const [groupId, grupo] of Object.entries(grupos)) {
+      if (!grupo || !grupo.membros) continue;
+
+      const advert = grupo.advertencias || {};
+      for (const [membroId, m] of Object.entries(grupo.membros)) {
+        if (!m) continue;
+
+        if (typeof m.nome === 'string' && m.nome.length > maxNome) {
+          m.nome = m.nome.slice(0, maxNome);
+          nomesTruncados++;
+        }
+
+        const total = Number(m.totalMensagens || 0);
+        const ultima = (m.ultimaMensagem || '').trim();
+        const firstSeen = (m.firstSeen || '').trim();
+
+        // Remove apenas "0 mensagens" sem ultimaMensagem (nunca falou) e sem advertências
+        if (total === 0 && !ultima && !advert[membroId]) {
+          const base = firstSeen ? Date.parse(firstSeen) : NaN;
+          if (!Number.isNaN(base) && (agora - base) > limiteZeroMs) {
+            delete grupo.membros[membroId];
+            removidos++;
+          }
+        }
+      }
+    }
+  }
+
+  await gravarDB(db);
+  return { removidos, nomesTruncados };
 }
 
 /**
@@ -336,10 +387,12 @@ async function obterEstatisticasGrupo(usuarioId, groupId, diasInativoDefault = 3
                   grupo.membros[item.id] = {
                     totalMensagens: 0,
                     ultimaMensagem: '',
-                    nome: nomeReal
+                    nome: nomeReal,
+                    firstSeen: new Date().toISOString()
                   };
                 } else {
                   grupo.membros[item.id].nome = nomeReal;
+                  if (!grupo.membros[item.id].firstSeen) grupo.membros[item.id].firstSeen = new Date().toISOString();
                 }
                 
                 // Também atualiza o mapa em memória usado logo abaixo
@@ -347,10 +400,12 @@ async function obterEstatisticasGrupo(usuarioId, groupId, diasInativoDefault = 3
                   membrosSalvosMapped[item.id] = {
                     totalMensagens: 0,
                     ultimaMensagem: '',
-                    nome: nomeReal
+                    nome: nomeReal,
+                    firstSeen: grupo.membros[item.id]?.firstSeen || new Date().toISOString()
                   };
                 } else {
                   membrosSalvosMapped[item.id].nome = nomeReal;
+                  if (!membrosSalvosMapped[item.id].firstSeen) membrosSalvosMapped[item.id].firstSeen = grupo.membros[item.id]?.firstSeen || new Date().toISOString();
                 }
                 houveAtualizacao = true;
               }
@@ -565,6 +620,7 @@ module.exports = {
   salvarTermosProibidos,
   salvarModeracaoAtiva,
   salvarLinksPermitidos,
+  podarBanco,
   obterGrupos,
   obterEstatisticasGrupo
 };
