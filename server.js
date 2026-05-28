@@ -81,19 +81,32 @@ const usuariosSendoRemovidos = new Set();
 let delecaoEmAndamento = false;
 const filaDelecao = [];
 
-// Sistema de Rodízio de Chaves da API do Gemini
+// Sistema de Rodízio de Chaves da API do Gemini (GEMINI_API_KEY=chave1,chave2,chave3)
 let currentGeminiKeyIndex = 0;
-function getNextGeminiKey() {
+const GEMINI_MODEL_URL =
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+
+function getGeminiKeys() {
   const envKey = process.env.GEMINI_API_KEY;
-  if (!envKey) return null;
-  const keys = envKey.split(',').map(k => k.trim()).filter(k => k);
-  if (keys.length === 0) return null;
-  const keyToUse = keys[currentGeminiKeyIndex % keys.length];
-  currentGeminiKeyIndex++;
-  return keyToUse;
+  if (!envKey) return [];
+  return envKey.split(',').map((k) => k.trim()).filter(Boolean);
 }
 
-const GEMINI_RETRY_HTTP = new Set([429, 500, 503, 504]);
+function temChavesGemini() {
+  return getGeminiKeys().length > 0;
+}
+
+/** Compatibilidade: retorna uma chave do rodízio (preferir chamarGeminiComRotacaoChaves). */
+function getNextGeminiKey() {
+  const keys = getGeminiKeys();
+  if (keys.length === 0) return null;
+  const key = keys[currentGeminiKeyIndex % keys.length];
+  currentGeminiKeyIndex++;
+  return key;
+}
+
+/** Retry na mesma chave (503/5xx). 429/quota → troca de chave. */
+const GEMINI_RETRY_HTTP = new Set([500, 503, 504]);
 const GEMINI_MAX_TENTATIVAS = parseInt(process.env.GEMINI_RETRY_MAX || '3', 10);
 const GEMINI_RETRY_BASE_MS = parseInt(process.env.GEMINI_RETRY_DELAY_MS || '1500', 10);
 
@@ -101,57 +114,142 @@ function sleepMs(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** POST no Gemini com retry em 429/5xx e timeout por tentativa */
-async function fetchGeminiComRetry(url, payload, timeoutMs = 25000) {
+function mascararChaveGemini(apiKey) {
+  if (!apiKey || apiKey.length < 8) return '****';
+  return `...${apiKey.slice(-4)}`;
+}
+
+function geminiDeveTrocarChave(status, errData) {
+  if (status === 429) return true;
+  if (status === 403) return true;
+  const raw = JSON.stringify(errData || {}).toLowerCase();
+  return (
+    raw.includes('quota') ||
+    raw.includes('resource_exhausted') ||
+    raw.includes('rate limit') ||
+    raw.includes('rate_limit') ||
+    raw.includes('too many requests') ||
+    raw.includes('billing') ||
+    raw.includes('limit exceeded') ||
+    raw.includes('exceeded your')
+  );
+}
+
+async function fetchGeminiUmaTentativa(apiKey, payload, timeoutMs) {
+  const url = `${GEMINI_MODEL_URL}?key=${apiKey}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+
+    if (res.ok) return { ok: true, res };
+
+    let errData = null;
+    try {
+      errData = await res.json();
+    } catch {
+      errData = null;
+    }
+    return { ok: false, status: res.status, errData };
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
+}
+
+/**
+ * Chama o Gemini com retry por chave e troca automática quando a cota esgota (429/quota).
+ * @returns {Promise<Response|{ ok: false, status: number, errData: object|null }>}
+ */
+async function chamarGeminiComRotacaoChaves(payload, timeoutMs = 25000) {
+  const keys = getGeminiKeys();
+  if (keys.length === 0) {
+    return { ok: false, status: 0, errData: { error: 'GEMINI_API_KEY não configurada' } };
+  }
+
   let ultimoStatus = 0;
   let ultimoErroJson = null;
+  const startIdx = currentGeminiKeyIndex % keys.length;
 
-  for (let tentativa = 1; tentativa <= GEMINI_MAX_TENTATIVAS; tentativa++) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+  for (let ki = 0; ki < keys.length; ki++) {
+    const keySlot = (startIdx + ki) % keys.length;
+    const apiKey = keys[keySlot];
+    const label = mascararChaveGemini(apiKey);
 
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
-      clearTimeout(timer);
-
-      if (res.ok) return res;
-
-      ultimoStatus = res.status;
+    for (let tentativa = 1; tentativa <= GEMINI_MAX_TENTATIVAS; tentativa++) {
       try {
-        ultimoErroJson = await res.json();
-      } catch {
-        ultimoErroJson = null;
-      }
+        const resultado = await fetchGeminiUmaTentativa(apiKey, payload, timeoutMs);
 
-      if (GEMINI_RETRY_HTTP.has(res.status) && tentativa < GEMINI_MAX_TENTATIVAS) {
-        const espera = GEMINI_RETRY_BASE_MS * tentativa;
-        console.warn(
-          `⚠️ Gemini HTTP ${res.status} (tentativa ${tentativa}/${GEMINI_MAX_TENTATIVAS}). Nova tentativa em ${espera}ms...`
-        );
-        await sleepMs(espera);
-        continue;
-      }
+        if (resultado.ok) {
+          currentGeminiKeyIndex = (keySlot + 1) % keys.length;
+          if (ki > 0) {
+            console.log(`✅ Gemini respondeu com chave alternativa ${label} (${ki + 1}/${keys.length}).`);
+          }
+          return resultado.res;
+        }
 
-      return { ok: false, status: res.status, errData: ultimoErroJson };
-    } catch (err) {
-      clearTimeout(timer);
-      if (tentativa < GEMINI_MAX_TENTATIVAS) {
-        const espera = GEMINI_RETRY_BASE_MS * tentativa;
-        console.warn(
-          `⚠️ Gemini rede/timeout (tentativa ${tentativa}/${GEMINI_MAX_TENTATIVAS}): ${err.message}. Nova tentativa em ${espera}ms...`
-        );
-        await sleepMs(espera);
-        continue;
+        ultimoStatus = resultado.status;
+        ultimoErroJson = resultado.errData;
+
+        if (resultado.status === 400) {
+          console.error(`❌ Gemini pedido inválido (HTTP 400) chave ${label}:`, JSON.stringify(ultimoErroJson));
+          return { ok: false, status: resultado.status, errData: ultimoErroJson };
+        }
+
+        if (geminiDeveTrocarChave(resultado.status, resultado.errData)) {
+          console.warn(
+            `🔑 Gemini chave ${label}: cota/limite (HTTP ${resultado.status}). ` +
+              `Trocando para outra chave (${ki + 1}/${keys.length})...`
+          );
+          break;
+        }
+
+        if (GEMINI_RETRY_HTTP.has(resultado.status) && tentativa < GEMINI_MAX_TENTATIVAS) {
+          const espera = GEMINI_RETRY_BASE_MS * tentativa;
+          console.warn(
+            `⚠️ Gemini HTTP ${resultado.status} chave ${label} ` +
+              `(tentativa ${tentativa}/${GEMINI_MAX_TENTATIVAS}). Retry em ${espera}ms...`
+          );
+          await sleepMs(espera);
+          continue;
+        }
+
+        if (ki < keys.length - 1) {
+          console.warn(`⚠️ Gemini HTTP ${resultado.status} chave ${label}. Tentando próxima chave...`);
+          break;
+        }
+
+        return { ok: false, status: resultado.status, errData: resultado.errData };
+      } catch (err) {
+        if (tentativa < GEMINI_MAX_TENTATIVAS) {
+          const espera = GEMINI_RETRY_BASE_MS * tentativa;
+          console.warn(
+            `⚠️ Gemini rede/timeout chave ${label} (${tentativa}/${GEMINI_MAX_TENTATIVAS}): ${err.message}`
+          );
+          await sleepMs(espera);
+          continue;
+        }
+        if (ki < keys.length - 1) {
+          console.warn(`⚠️ Gemini falhou chave ${label}. Tentando próxima chave...`);
+          break;
+        }
+        throw err;
       }
-      throw err;
     }
   }
 
+  currentGeminiKeyIndex = (currentGeminiKeyIndex + 1) % keys.length;
+  console.error(
+    `❌ Gemini: todas as ${keys.length} chave(s) falharam. Último HTTP ${ultimoStatus}:`,
+    JSON.stringify(ultimoErroJson || {})
+  );
   return { ok: false, status: ultimoStatus, errData: ultimoErroJson };
 }
 
@@ -325,7 +423,7 @@ async function encerrarSessao(usuarioId, forcarLogoff = false) {
 /**
  * Analisa uma imagem ou vídeo em base64 usando a API do Gemini 1.5 Flash.
  */
-async function analisarImagemComIA(base64Data, mimeType, apiKey) {
+async function analisarImagemComIA(base64Data, mimeType) {
   try {
     const parts = [
       {
@@ -398,7 +496,6 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
       });
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     const payload = {
       contents: [{ parts: parts }],
       generationConfig: {
@@ -412,14 +509,9 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
       ]
     };
 
-    const res = await fetchGeminiComRetry(url, payload, 25000);
+    const res = await chamarGeminiComRotacaoChaves(payload, 25000);
 
     if (!res.ok) {
-      const status = res.status || 0;
-      console.error(
-        `⚠️ API Gemini (visão) falhou após ${GEMINI_MAX_TENTATIVAS} tentativa(s) HTTP ${status}:`,
-        JSON.stringify(res.errData || {})
-      );
       return 'FALHA';
     }
 
@@ -460,9 +552,8 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
  * Analisa o contexto de um texto usando a API do Gemini 1.5 Flash.
  * Utilizado para desempatar falsos positivos de palavras-chave.
  */
-async function analisarTextoComIA(texto, apiKey) {
+async function analisarTextoComIA(texto) {
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     const payload = {
       contents: [
         {
@@ -482,12 +573,9 @@ Responda ESTRITAMENTE apenas com a palavra NAO se for conversa normal, gíria ("
       ]
     };
 
-    const res = await fetchGeminiComRetry(url, payload, 20000);
+    const res = await chamarGeminiComRotacaoChaves(payload, 20000);
 
     if (!res.ok) {
-      console.warn(
-        `⚠️ API Gemini Texto falhou após ${GEMINI_MAX_TENTATIVAS} tentativa(s): HTTP ${res.status || 0}`
-      );
       return 'FALHA';
     }
 
@@ -989,10 +1077,9 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             });
           }
 
-          const geminiKeyTexto = getNextGeminiKey();
-          if (contemSpam && geminiKeyTexto && !avaliacao.bloqueiaIA) {
+          if (contemSpam && temChavesGemini() && !avaliacao.bloqueiaIA) {
             console.log(`🤖 [Moderador IA] Verificando contexto do texto de ${participanteId} com Gemini para evitar falso positivo...`);
-            const resultadoIA = await analisarTextoComIA(corpo, geminiKeyTexto);
+            const resultadoIA = await analisarTextoComIA(corpo);
             if (resultadoIA === 'FALHA') {
               console.warn(`⚠️ [Moderador IA] Texto não revalidado pela IA (indisponível). Mantém bloqueio por palavra-chave.`);
             } else if (resultadoIA === 'NAO') {
@@ -1079,8 +1166,8 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
           }
 
           // 4. Análise Avançada de Imagem e Vídeo por IA (Opcional - Ativo se houver GEMINI_API_KEY)
-          const geminiKeyMidia = !contemSpam && msg.hasMedia ? getNextGeminiKey() : null;
-          if (geminiKeyMidia) {
+          const usarGeminiMidia = !contemSpam && msg.hasMedia && temChavesGemini();
+          if (usarGeminiMidia) {
             try {
               const media = await msg.downloadMedia();
               if (media) {
@@ -1102,7 +1189,7 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
                     const tipoMidia = media.mimetype.startsWith('image/') ? 'imagem' : 'vídeo';
                     console.log(`🤖 [Moderador IA] Analisando ${tipoMidia} de ${participanteId} (${tamanhoMB.toFixed(2)}MB) com Gemini Vision...`);
                     
-                    const resultadoIA = await analisarImagemComIA(media.data, media.mimetype, geminiKeyMidia);
+                    const resultadoIA = await analisarImagemComIA(media.data, media.mimetype);
                     
                     if (resultadoIA === 'SIM') {
                       contemSpam = true;
@@ -1530,9 +1617,7 @@ app.post('/api/groups/:groupId/links', async (req, res) => {
 // Rota para testar a imagem na IA (Gemini Vision Tester)
 app.post('/api/ia/test', async (req, res) => {
   const { base64Data, mimeType } = req.body;
-  const apiKey = getNextGeminiKey();
-
-  if (!apiKey) {
+  if (!temChavesGemini()) {
     return res.status(400).json({ error: 'Chave API do Gemini não configurada no servidor!' });
   }
   if (!base64Data || !mimeType) {
@@ -1540,7 +1625,7 @@ app.post('/api/ia/test', async (req, res) => {
   }
 
   try {
-    const resultado = await analisarImagemComIA(base64Data, mimeType, apiKey);
+    const resultado = await analisarImagemComIA(base64Data, mimeType);
     res.json({ success: true, resultado });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1601,6 +1686,12 @@ server.listen(PORT, async () => {
   console.log(`====================================================`);
   console.log(`🚀 PAINEL WEB SAAS INICIADO COM SUCESSO!`);
   console.log(`🌐 Endereço Local: http://localhost:${PORT}`);
+  const qtdChavesGemini = getGeminiKeys().length;
+  if (qtdChavesGemini > 0) {
+    console.log(`🤖 Gemini: ${qtdChavesGemini} chave(s) API (rotação automática em cota/429)`);
+  } else {
+    console.warn(`⚠️ Gemini: GEMINI_API_KEY não configurada — moderação por IA de mídia desativada`);
+  }
   console.log(`====================================================`);
 
   await restaurarSessoesAnteriores();
