@@ -1,4 +1,10 @@
-const { avaliarTexto, resolverIdGrupo, ehMensagemDeGrupo } = require('./moderationRules');
+const {
+  avaliarTexto,
+  resolverIdGrupo,
+  ehMensagemDeGrupo,
+  ehFigurinhaWhatsApp,
+  deveAnalisarMidiaComIA
+} = require('./moderationRules');
 
 const grupoId = '120363123456789012@g.us';
 const donoId = '557398266511@c.us';
@@ -16,6 +22,28 @@ if (!ehMensagemDeGrupo({ from: donoId, to: grupoId, fromMe: true })) {
   process.exit(1);
 }
 console.log('OK: resolverIdGrupo / fromMe dono sessão');
+
+if (!ehFigurinhaWhatsApp({ type: 'sticker', hasMedia: true })) {
+  console.error('FALHA: deveria detectar figurinha');
+  process.exit(1);
+}
+if (deveAnalisarMidiaComIA({ type: 'sticker', hasMedia: true })) {
+  console.error('FALHA: figurinha não deve ir para IA');
+  process.exit(1);
+}
+if (!deveAnalisarMidiaComIA({ type: 'image', hasMedia: true })) {
+  console.error('FALHA: imagem deve ir para IA');
+  process.exit(1);
+}
+if (!deveAnalisarMidiaComIA({ type: 'video', hasMedia: true })) {
+  console.error('FALHA: vídeo deve ir para IA');
+  process.exit(1);
+}
+if (deveAnalisarMidiaComIA({ type: 'document', hasMedia: true })) {
+  console.error('FALHA: documento não deve ir para IA');
+  process.exit(1);
+}
+console.log('OK: figurinha vs imagem/vídeo para IA');
 
 const casos = [
   { msg: 'morreu de rir', esperado: true },

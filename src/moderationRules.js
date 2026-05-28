@@ -512,6 +512,35 @@ function ehMensagemDeGrupo(msg) {
   return !!resolverIdGrupo(msg);
 }
 
+/** Figurinha do WhatsApp (não gastar cota do Gemini). */
+function ehFigurinhaWhatsApp(msg) {
+  if (!msg) return false;
+  const tipo = String(msg.type || msg._data?.type || '').toLowerCase();
+  if (tipo === 'sticker') return true;
+  if (msg._data?.stickerSentTs != null) return true;
+  return false;
+}
+
+/**
+ * Só imagem ou vídeo reais vão para análise por IA.
+ * Ignora figurinha, áudio, documento, GIF como sticker, etc.
+ */
+function deveAnalisarMidiaComIA(msg) {
+  if (!msg?.hasMedia) return false;
+  if (ehFigurinhaWhatsApp(msg)) return false;
+
+  const tipo = String(msg.type || msg._data?.type || '').toLowerCase();
+  return tipo === 'image' || tipo === 'video';
+}
+
+/** Após download: reforço se mimetype for de figurinha */
+function mimetypeEhFigurinha(mimetype, msg) {
+  if (ehFigurinhaWhatsApp(msg)) return true;
+  const mt = (mimetype || '').toLowerCase();
+  if (mt === 'image/webp' && ehFigurinhaWhatsApp(msg)) return true;
+  return false;
+}
+
 /** Normaliza comando: "/ajuda " -> { cmd: '/ajuda', texto: '...' } */
 function parseComando(corpo) {
   const texto = (corpo || '').trim();
@@ -530,6 +559,9 @@ module.exports = {
   resolverParticipanteId,
   resolverIdGrupo,
   ehMensagemDeGrupo,
+  ehFigurinhaWhatsApp,
+  deveAnalisarMidiaComIA,
+  mimetypeEhFigurinha,
   obterIdPrivadoRemetente,
   deveProcessarMensagemAgora,
   parseComando

@@ -21,7 +21,10 @@ const {
   ehMensagemDeGrupo,
   obterIdPrivadoRemetente,
   deveProcessarMensagemAgora,
-  parseComando
+  parseComando,
+  ehFigurinhaWhatsApp,
+  deveAnalisarMidiaComIA,
+  mimetypeEhFigurinha
 } = require('./src/moderationRules');
 
 // Buffer de logs na memória para depuração remota rápida do SaaS
@@ -83,8 +86,18 @@ const filaDelecao = [];
 
 // Sistema de Rodízio de Chaves da API do Gemini (GEMINI_API_KEY=chave1,chave2,chave3)
 let currentGeminiKeyIndex = 0;
-const GEMINI_MODEL_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+
+function getGeminiModels() {
+  const primary = (process.env.GEMINI_MODEL || 'gemini-2.5-flash').trim();
+  const fallback = (process.env.GEMINI_MODEL_FALLBACK || 'gemini-2.0-flash').trim();
+  const models = [primary];
+  if (fallback && fallback !== primary) models.push(fallback);
+  return models;
+}
+
+function urlGeminiModel(model) {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+}
 
 function getGeminiKeys() {
   const envKey = process.env.GEMINI_API_KEY;
@@ -135,8 +148,8 @@ function geminiDeveTrocarChave(status, errData) {
   );
 }
 
-async function fetchGeminiUmaTentativa(apiKey, payload, timeoutMs) {
-  const url = `${GEMINI_MODEL_URL}?key=${apiKey}`;
+async function fetchGeminiUmaTentativa(apiKey, payload, timeoutMs, model) {
+  const url = `${urlGeminiModel(model)}?key=${apiKey}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -165,10 +178,10 @@ async function fetchGeminiUmaTentativa(apiKey, payload, timeoutMs) {
 }
 
 /**
- * Chama o Gemini com retry por chave e troca automática quando a cota esgota (429/quota).
+ * Retry + rotação de chaves para um modelo Gemini.
  * @returns {Promise<Response|{ ok: false, status: number, errData: object|null }>}
  */
-async function chamarGeminiComRotacaoChaves(payload, timeoutMs = 25000) {
+async function chamarGeminiComRotacaoChavesComModelo(payload, timeoutMs, model) {
   const keys = getGeminiKeys();
   if (keys.length === 0) {
     return { ok: false, status: 0, errData: { error: 'GEMINI_API_KEY não configurada' } };
@@ -185,12 +198,12 @@ async function chamarGeminiComRotacaoChaves(payload, timeoutMs = 25000) {
 
     for (let tentativa = 1; tentativa <= GEMINI_MAX_TENTATIVAS; tentativa++) {
       try {
-        const resultado = await fetchGeminiUmaTentativa(apiKey, payload, timeoutMs);
+        const resultado = await fetchGeminiUmaTentativa(apiKey, payload, timeoutMs, model);
 
         if (resultado.ok) {
           currentGeminiKeyIndex = (keySlot + 1) % keys.length;
           if (ki > 0) {
-            console.log(`✅ Gemini respondeu com chave alternativa ${label} (${ki + 1}/${keys.length}).`);
+            console.log(`✅ Gemini [${model}] respondeu com chave alternativa ${label} (${ki + 1}/${keys.length}).`);
           }
           return resultado.res;
         }
@@ -199,13 +212,13 @@ async function chamarGeminiComRotacaoChaves(payload, timeoutMs = 25000) {
         ultimoErroJson = resultado.errData;
 
         if (resultado.status === 400) {
-          console.error(`❌ Gemini pedido inválido (HTTP 400) chave ${label}:`, JSON.stringify(ultimoErroJson));
+          console.error(`❌ Gemini [${model}] pedido inválido (HTTP 400) chave ${label}:`, JSON.stringify(ultimoErroJson));
           return { ok: false, status: resultado.status, errData: ultimoErroJson };
         }
 
         if (geminiDeveTrocarChave(resultado.status, resultado.errData)) {
           console.warn(
-            `🔑 Gemini chave ${label}: cota/limite (HTTP ${resultado.status}). ` +
+            `🔑 Gemini [${model}] chave ${label}: cota/limite (HTTP ${resultado.status}). ` +
               `Trocando para outra chave (${ki + 1}/${keys.length})...`
           );
           break;
@@ -214,7 +227,7 @@ async function chamarGeminiComRotacaoChaves(payload, timeoutMs = 25000) {
         if (GEMINI_RETRY_HTTP.has(resultado.status) && tentativa < GEMINI_MAX_TENTATIVAS) {
           const espera = GEMINI_RETRY_BASE_MS * tentativa;
           console.warn(
-            `⚠️ Gemini HTTP ${resultado.status} chave ${label} ` +
+            `⚠️ Gemini [${model}] HTTP ${resultado.status} chave ${label} ` +
               `(tentativa ${tentativa}/${GEMINI_MAX_TENTATIVAS}). Retry em ${espera}ms...`
           );
           await sleepMs(espera);
@@ -247,10 +260,42 @@ async function chamarGeminiComRotacaoChaves(payload, timeoutMs = 25000) {
 
   currentGeminiKeyIndex = (currentGeminiKeyIndex + 1) % keys.length;
   console.error(
-    `❌ Gemini: todas as ${keys.length} chave(s) falharam. Último HTTP ${ultimoStatus}:`,
+    `❌ Gemini [${model}]: todas as ${keys.length} chave(s) falharam. Último HTTP ${ultimoStatus}:`,
     JSON.stringify(ultimoErroJson || {})
   );
   return { ok: false, status: ultimoStatus, errData: ultimoErroJson };
+}
+
+/**
+ * Chama o Gemini com retry, rotação de chaves e modelo reserva se o principal estiver em 503.
+ */
+async function chamarGeminiComRotacaoChaves(payload, timeoutMs = 25000) {
+  const models = getGeminiModels();
+  let ultimoErro = { ok: false, status: 0, errData: null };
+
+  for (let mi = 0; mi < models.length; mi++) {
+    const model = models[mi];
+    const resultado = await chamarGeminiComRotacaoChavesComModelo(payload, timeoutMs, model);
+
+    if (resultado.ok) {
+      if (mi > 0) {
+        console.log(`✅ Gemini respondeu com modelo reserva: ${model}`);
+      }
+      return resultado;
+    }
+
+    ultimoErro = resultado;
+    const retryable = [429, 500, 503, 504].includes(resultado.status);
+
+    if (mi < models.length - 1 && retryable) {
+      console.warn(
+        `⚠️ Modelo ${model} indisponível (HTTP ${resultado.status}). ` +
+          `Tentando modelo reserva ${models[mi + 1]}...`
+      );
+    }
+  }
+
+  return ultimoErro;
 }
 
 /**
@@ -1047,8 +1092,12 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
         console.log(`👤 [DEBUG] Verificação de Admin no grupo "${nomeGrupo}" para o remetente ${participanteId}: eAdmin = ${eAdmin}`);
 
         if (!eAdmin) {
-          // Se for mídia, aguarda 500ms para garantir que todos os metadados (como isForwarded) foram recebidos e preenchidos no objeto pelo whatsapp-web.js
-          if (msg.hasMedia) {
+          if (msg.hasMedia && ehFigurinhaWhatsApp(msg)) {
+            console.log(`🎭 [Moderador] Figurinha ignorada (sem IA) de ${participanteId}`);
+          }
+
+          // Só aguarda metadados para imagem/vídeo que serão analisados (não figurinha)
+          if (deveAnalisarMidiaComIA(msg)) {
             await new Promise(resolve => setTimeout(resolve, 500));
           }
 
@@ -1142,7 +1191,7 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
           }
 
           // 3. Heurística Inteligente para Mídias Encaminhadas (Com redobrada resiliência)
-          if (!contemSpam && msg.hasMedia) {
+          if (!contemSpam && deveAnalisarMidiaComIA(msg)) {
             let isForwarded = msg.isForwarded || msg._data?.isForwarded || msg._data?.contextInfo?.isForwarded;
             let score = msg.forwardingScore || msg._data?.forwardingScore || msg._data?.contextInfo?.forwardingScore || 0;
 
@@ -1165,13 +1214,15 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             }
           }
 
-          // 4. Análise Avançada de Imagem e Vídeo por IA (Opcional - Ativo se houver GEMINI_API_KEY)
-          const usarGeminiMidia = !contemSpam && msg.hasMedia && temChavesGemini();
+          // 4. Análise por IA: apenas imagem ou vídeo (figurinhas são ignoradas)
+          const usarGeminiMidia = !contemSpam && deveAnalisarMidiaComIA(msg) && temChavesGemini();
           if (usarGeminiMidia) {
             try {
               const media = await msg.downloadMedia();
               if (media) {
-                if (media.mimetype.startsWith('image/') || media.mimetype.startsWith('video/')) {
+                if (mimetypeEhFigurinha(media.mimetype, msg)) {
+                  console.log(`🎭 [Moderador IA] Figurinha/webp de pacote ignorada após download (${media.mimetype})`);
+                } else if (media.mimetype.startsWith('image/') || media.mimetype.startsWith('video/')) {
                   // Estima o tamanho a partir do base64 (3/4 do comprimento da string base64)
                   const tamanhoMB = (media.data.length * 0.75) / (1024 * 1024);
                   
@@ -1215,6 +1266,8 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
                       });
                     }
                   }
+                } else {
+                  console.log(`ℹ️ [Moderador IA] Tipo de mídia não analisado por IA: ${media.mimetype}`);
                 }
               } else {
                 console.log(`⚠️ [Moderador IA] Falha ao baixar mídia de ${participanteId}: downloadMedia retornou vazio.`);
@@ -1687,8 +1740,11 @@ server.listen(PORT, async () => {
   console.log(`🚀 PAINEL WEB SAAS INICIADO COM SUCESSO!`);
   console.log(`🌐 Endereço Local: http://localhost:${PORT}`);
   const qtdChavesGemini = getGeminiKeys().length;
+  const modelosGemini = getGeminiModels();
   if (qtdChavesGemini > 0) {
-    console.log(`🤖 Gemini: ${qtdChavesGemini} chave(s) API (rotação automática em cota/429)`);
+    console.log(
+      `🤖 Gemini: ${qtdChavesGemini} chave(s), modelos: ${modelosGemini.join(' → ')} (retry + rotação)`
+    );
   } else {
     console.warn(`⚠️ Gemini: GEMINI_API_KEY não configurada — moderação por IA de mídia desativada`);
   }
