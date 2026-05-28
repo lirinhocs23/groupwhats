@@ -24,7 +24,17 @@ const casos = [
   { msg: 'rifa de carro chama no pv', esperado: false },
   { msg: 'morreu no acidente na BR', esperado: false },
   { msg: 'vendo som automotivo', esperado: false },
-  { msg: 'filho da puta', esperado: false }
+  { msg: 'filho da puta', esperado: false },
+  {
+    msg: 'Vamos agendar seu horário Higienização lavagem ar seco estofados sofá',
+    esperado: false,
+    grupoEspada: true
+  },
+  {
+    msg: 'Higienização de estofados trabalhamos em domicílio',
+    esperado: false,
+    grupoEspada: true
+  }
 ];
 
 let falhas = 0;

@@ -134,6 +134,73 @@ const TERMOS_SPAM_COMERCIAL = [
   'adquira ja'
 ];
 
+/** Serviços/comércio fora do tema espadas (grupos de espada) */
+const TERMOS_SERVICO = [
+  'estofado',
+  'estofados',
+  'higienizacao',
+  'impermeabilizacao',
+  'dedetizacao',
+  'desentupidora',
+  'encanador',
+  'eletricista',
+  'pintor',
+  'pedreiro',
+  'gesseiro',
+  'marceneiro',
+  'autolavagem',
+  'martelinho',
+  'funilaria',
+  'mecanica',
+  'oficina mecanica',
+  'clinica',
+  'estetica',
+  'depilacao',
+  'manicure',
+  'delivery',
+  'pizzaria',
+  'hamburgueria',
+  'acai',
+  'sorveteria',
+  'pet shop',
+  'veterinario',
+  'advogado',
+  'contador',
+  'personal trainer',
+  'nutricionista',
+  'psicologo',
+  'fisioterapia',
+  'massagem',
+  'colchoes',
+  'moveis',
+  'moveis planejados'
+];
+
+const FRASES_SERVICO_COMERCIAL = [
+  'lavagem a seco',
+  'lavagem ar seco',
+  'lavagem em domicilio',
+  'higienizacao de',
+  'higienizacao em',
+  'agendar seu horario',
+  'agende seu horario',
+  'trabalhamos em domicilio',
+  'orcamento pelo zap',
+  'orcamento no zap',
+  'orcamento via zap',
+  'chame no whats',
+  'chama no whats',
+  'servico de limpeza',
+  'limpeza de sofa',
+  'limpeza de sofas',
+  'antes e depois',
+  'pix e cartao',
+  'aceitamos cartao',
+  'parcelamos em',
+  'promocao imperdivel',
+  'melhor preco da cidade'
+];
+
 const TERMOS_UNIVERSO_ESPADA = [
   'espada',
   'espadas',
@@ -214,6 +281,24 @@ function mensagemTemFrasePermitida(textoNorm) {
 
 function temTermoUniversoEspada(textoNorm) {
   return TERMOS_UNIVERSO_ESPADA.some((t) => contemTermo(textoNorm, t));
+}
+
+/** Telefone ou @ de rede social na mensagem original (antes de normalizar) */
+function detectarContatoComercial(corpoBruto) {
+  if (!corpoBruto || typeof corpoBruto !== 'string') return false;
+  const tel = /(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?\d{4,5}[-.\s]?\d{4}\b/;
+  const ig = /@[\w.]{3,30}/;
+  return tel.test(corpoBruto) || ig.test(corpoBruto);
+}
+
+function detectarAnuncioServico(textoNorm) {
+  for (const frase of FRASES_SERVICO_COMERCIAL) {
+    if (textoNorm.includes(frase)) return frase;
+  }
+  for (const termo of TERMOS_SERVICO) {
+    if (contemTermo(textoNorm, termo)) return termo;
+  }
+  return null;
 }
 
 /**
@@ -307,6 +392,34 @@ function avaliarTexto(corpo, opts = {}) {
 
       if (opts.grupoEspada || temEspada) {
         return { permitido: true, camada: 'frase', motivo: 'compra/venda de espadas permitida (regra 5)' };
+      }
+    }
+
+    // Anúncios de serviço fora do tema (ex.: higienização de estofados)
+    if (opts.grupoEspada) {
+      const servico = detectarAnuncioServico(texto);
+      if (servico) {
+        return {
+          permitido: false,
+          camada: 'servico',
+          motivo: `anúncio de serviço fora do tema ("${servico}")`,
+          bloqueiaIA: true
+        };
+      }
+
+      if (detectarContatoComercial(corpo) && texto.length >= 25) {
+        const temSinalServico =
+          FRASES_SERVICO_COMERCIAL.some((f) => texto.includes(f)) ||
+          TERMOS_SERVICO.some((t) => contemTermo(texto, t)) ||
+          TERMOS_SPAM_COMERCIAL.some((t) => contemTermo(texto, t));
+        if (temSinalServico) {
+          return {
+            permitido: false,
+            camada: 'servico',
+            motivo: 'divulgação comercial (contato + serviço/propaganda)',
+            bloqueiaIA: true
+          };
+        }
       }
     }
   }
@@ -411,6 +524,8 @@ module.exports = {
   FRASES_PERMITIDAS,
   normalizarTextoParaFiltro,
   avaliarTexto,
+  detectarAnuncioServico,
+  detectarContatoComercial,
   PROMPT_REGRAS_GRUPO,
   resolverParticipanteId,
   resolverIdGrupo,

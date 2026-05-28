@@ -93,6 +93,68 @@ function getNextGeminiKey() {
   return keyToUse;
 }
 
+const GEMINI_RETRY_HTTP = new Set([429, 500, 503, 504]);
+const GEMINI_MAX_TENTATIVAS = parseInt(process.env.GEMINI_RETRY_MAX || '3', 10);
+const GEMINI_RETRY_BASE_MS = parseInt(process.env.GEMINI_RETRY_DELAY_MS || '1500', 10);
+
+function sleepMs(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** POST no Gemini com retry em 429/5xx e timeout por tentativa */
+async function fetchGeminiComRetry(url, payload, timeoutMs = 25000) {
+  let ultimoStatus = 0;
+  let ultimoErroJson = null;
+
+  for (let tentativa = 1; tentativa <= GEMINI_MAX_TENTATIVAS; tentativa++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+
+      if (res.ok) return res;
+
+      ultimoStatus = res.status;
+      try {
+        ultimoErroJson = await res.json();
+      } catch {
+        ultimoErroJson = null;
+      }
+
+      if (GEMINI_RETRY_HTTP.has(res.status) && tentativa < GEMINI_MAX_TENTATIVAS) {
+        const espera = GEMINI_RETRY_BASE_MS * tentativa;
+        console.warn(
+          `⚠️ Gemini HTTP ${res.status} (tentativa ${tentativa}/${GEMINI_MAX_TENTATIVAS}). Nova tentativa em ${espera}ms...`
+        );
+        await sleepMs(espera);
+        continue;
+      }
+
+      return { ok: false, status: res.status, errData: ultimoErroJson };
+    } catch (err) {
+      clearTimeout(timer);
+      if (tentativa < GEMINI_MAX_TENTATIVAS) {
+        const espera = GEMINI_RETRY_BASE_MS * tentativa;
+        console.warn(
+          `⚠️ Gemini rede/timeout (tentativa ${tentativa}/${GEMINI_MAX_TENTATIVAS}): ${err.message}. Nova tentativa em ${espera}ms...`
+        );
+        await sleepMs(espera);
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  return { ok: false, status: ultimoStatus, errData: ultimoErroJson };
+}
+
 /**
  * Inicializa a sessão do WhatsApp para um usuário específico.
  */
@@ -350,22 +412,15 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
       ]
     };
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000); // 25 segundos de limite (menor que o timeout de 30s do Railway)
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeout);
+    const res = await fetchGeminiComRetry(url, payload, 25000);
 
     if (!res.ok) {
-      const errData = await res.json();
-      console.error(`⚠️ API Gemini respondeu com erro HTTP ${res.status}:`, JSON.stringify(errData));
-      return 'NAO';
+      const status = res.status || 0;
+      console.error(
+        `⚠️ API Gemini (visão) falhou após ${GEMINI_MAX_TENTATIVAS} tentativa(s) HTTP ${status}:`,
+        JSON.stringify(res.errData || {})
+      );
+      return 'FALHA';
     }
 
     const data = await res.json();
@@ -397,7 +452,7 @@ async function analisarImagemComIA(base64Data, mimeType, apiKey) {
     }
   } catch (err) {
     console.error('⚠️ Erro na análise de visão do Gemini:', err.message);
-    return 'NAO';
+    return 'FALHA';
   }
 }
 
@@ -427,15 +482,13 @@ Responda ESTRITAMENTE apenas com a palavra NAO se for conversa normal, gíria ("
       ]
     };
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    const res = await fetchGeminiComRetry(url, payload, 20000);
 
     if (!res.ok) {
-      console.warn(`⚠️ API Gemini Texto respondeu com status de erro: ${res.status}`);
-      return 'NAO'; // Em caso de falha de rede, é melhor permitir do que bloquear injustamente
+      console.warn(
+        `⚠️ API Gemini Texto falhou após ${GEMINI_MAX_TENTATIVAS} tentativa(s): HTTP ${res.status || 0}`
+      );
+      return 'FALHA';
     }
 
     const data = await res.json();
@@ -443,7 +496,7 @@ Responda ESTRITAMENTE apenas com a palavra NAO se for conversa normal, gíria ("
     return textoResposta.includes('SIM') ? 'SIM' : 'NAO';
   } catch (err) {
     console.error('⚠️ Erro na análise de texto do Gemini:', err.message);
-    return 'NAO';
+    return 'FALHA';
   }
 }
 
@@ -940,7 +993,9 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
           if (contemSpam && geminiKeyTexto && !avaliacao.bloqueiaIA) {
             console.log(`🤖 [Moderador IA] Verificando contexto do texto de ${participanteId} com Gemini para evitar falso positivo...`);
             const resultadoIA = await analisarTextoComIA(corpo, geminiKeyTexto);
-            if (resultadoIA === 'NAO') {
+            if (resultadoIA === 'FALHA') {
+              console.warn(`⚠️ [Moderador IA] Texto não revalidado pela IA (indisponível). Mantém bloqueio por palavra-chave.`);
+            } else if (resultadoIA === 'NAO') {
               // Liberado pela IA (Era uma conversa normal ou gíria)
               const nomeParticipante = msg._data.notifyName || participanteId.split('@')[0];
               io.to(usuarioId).emit('log_seguranca', {
@@ -1052,8 +1107,17 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
                     if (resultadoIA === 'SIM') {
                       contemSpam = true;
                       motivoSpam = `conteúdo visual impróprio detectado por Inteligência Artificial no ${tipoMidia}`;
+                    } else if (resultadoIA === 'FALHA') {
+                      console.warn(`⚠️ [Moderador IA] ${tipoMidia} não analisada (Gemini indisponível após retries).`);
+                      io.to(usuarioId).emit('log_seguranca', {
+                        data: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+                        grupo: nomeGrupo,
+                        membro: participanteId.split('@')[0],
+                        nome: msg._data.notifyName || 'Membro',
+                        acao: 'ALLOW',
+                        motivo: `${tipoMidia}: IA indisponível (503/timeout) — legenda já foi checada por palavras-chave`
+                      });
                     } else {
-                      // Log de sucesso/liberação da IA
                       io.to(usuarioId).emit('log_seguranca', {
                         data: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
                         grupo: nomeGrupo,
