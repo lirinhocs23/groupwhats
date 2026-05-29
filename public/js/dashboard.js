@@ -15,6 +15,12 @@ let chartBar = null;
 
 // Dados em cache
 let membrosGrupoCache = [];
+let statsMetaCache = null;
+let paginaAtualMembros = 1;
+let listaMembrosRenderizados = [];
+let tabelaMembrosExpandida = true;
+const MEMBROS_POR_PAGINA = 50;
+const MAX_PAGINAS_MEMBROS = 500;
 
 // Elementos DOM
 const dom = {
@@ -77,6 +83,11 @@ const dom = {
   // Moderação
   membroSearch: document.getElementById('membro-search'),
   membrosTableBody: document.getElementById('membros-table-body'),
+  membrosListMeta: document.getElementById('membros-list-meta'),
+  membrosPagination: document.getElementById('membros-pagination'),
+  membrosTableWrapper: document.getElementById('membros-table-wrapper'),
+  membrosTableCard: document.getElementById('membros-table-card'),
+  btnToggleMembrosTable: document.getElementById('btn-toggle-membros-table'),
 
   // Configurações (Alterar Senha)
   btnSettings: document.getElementById('btn-settings'),
@@ -433,7 +444,10 @@ async function carregarEstatisticasGrupo(groupId, silenciarFeedback = false) {
     document.getElementById('input-links').value = (stats.linksPermitidos || []).join(', ');
     
     // Atualiza tabela
-    membrosGrupoCache = stats.membrosList;
+    membrosGrupoCache = stats.membrosList || [];
+    statsMetaCache = stats.meta || null;
+    paginaAtualMembros = 1;
+    atualizarMetaListaMembros(stats);
     renderizarTabelaMembros(membrosGrupoCache);
     
   } catch (err) {
@@ -575,8 +589,110 @@ function atualizarGraficos(stats) {
   }]);
 }
 
+// ─── 📋 META DA LISTA (completa vs banco local) ───
+function atualizarMetaListaMembros(stats) {
+  if (!dom.membrosListMeta) return;
+  const meta = stats.meta || {};
+  const limite = stats.totais?.fantasmasComLimite ?? '-';
+  const limiteCfg = meta.limiteFantasmas ?? dom.filterLimite?.value ?? 3;
+
+  let texto = `${stats.totais?.total ?? 0} membros listados`;
+  if (meta.totalNoGrupoWhatsApp != null) {
+    texto += ` · ${meta.totalNoGrupoWhatsApp} no grupo WhatsApp`;
+    if (meta.adminsExcluidos > 0) texto += ` (${meta.adminsExcluidos} admin(s) oculto(s))`;
+  }
+  if (meta.fonte === 'banco_local') {
+    texto += ' · ⚠️ lista parcial (conecte o WhatsApp para lista completa)';
+  } else {
+    texto += ' · lista ao vivo do WhatsApp';
+  }
+  texto += ` · 👻 /fantasmas ${limiteCfg}: ${limite} membro(s)`;
+  dom.membrosListMeta.textContent = texto;
+  if (meta.aviso) {
+    dom.membrosListMeta.title = meta.aviso;
+  } else {
+    dom.membrosListMeta.title = '';
+  }
+}
+
+function calcularPaginacaoMembros(totalItens) {
+  const totalPaginas = Math.max(1, Math.ceil(totalItens / MEMBROS_POR_PAGINA));
+  return Math.min(MAX_PAGINAS_MEMBROS, totalPaginas);
+}
+
+function irParaPaginaMembros(pagina) {
+  const totalPaginas = calcularPaginacaoMembros(listaMembrosRenderizados.length);
+  paginaAtualMembros = Math.max(1, Math.min(totalPaginas, pagina));
+  renderizarTabelaMembros(listaMembrosRenderizados, false);
+}
+
+function renderizarPaginacaoMembros(totalItens) {
+  if (!dom.membrosPagination) return;
+
+  const totalPaginas = calcularPaginacaoMembros(totalItens);
+  if (totalItens === 0 || !tabelaMembrosExpandida) {
+    dom.membrosPagination.classList.add('hidden');
+    dom.membrosPagination.innerHTML = '';
+    return;
+  }
+
+  dom.membrosPagination.classList.remove('hidden');
+
+  const inicio = (paginaAtualMembros - 1) * MEMBROS_POR_PAGINA + 1;
+  const fim = Math.min(totalItens, paginaAtualMembros * MEMBROS_POR_PAGINA);
+
+  const btn = (label, page, disabled, active) =>
+    `<button type="button" class="page-btn${active ? ' active' : ''}" data-page="${page}" ${disabled ? 'disabled' : ''}>${label}</button>`;
+
+  let html = `<div class="pagination-info">Exibindo ${inicio}–${fim} de ${totalItens}</div><div class="pagination-buttons">`;
+  html += btn('«', 1, paginaAtualMembros <= 1, false);
+  html += btn('‹', paginaAtualMembros - 1, paginaAtualMembros <= 1, false);
+
+  const janela = 5;
+  let start = Math.max(1, paginaAtualMembros - Math.floor(janela / 2));
+  let end = Math.min(totalPaginas, start + janela - 1);
+  start = Math.max(1, end - janela + 1);
+
+  if (start > 1) html += btn('1', 1, false, paginaAtualMembros === 1);
+  if (start > 2) html += `<span class="page-ellipsis">…</span>`;
+
+  for (let p = start; p <= end; p++) {
+    html += btn(String(p), p, false, p === paginaAtualMembros);
+  }
+
+  if (end < totalPaginas - 1) html += `<span class="page-ellipsis">…</span>`;
+  if (end < totalPaginas) html += btn(String(totalPaginas), totalPaginas, false, paginaAtualMembros === totalPaginas);
+
+  html += btn('›', paginaAtualMembros + 1, paginaAtualMembros >= totalPaginas, false);
+  html += btn('»', totalPaginas, paginaAtualMembros >= totalPaginas, false);
+  html += '</div>';
+
+  if (totalPaginas >= MAX_PAGINAS_MEMBROS) {
+    html += `<p class="pagination-cap">Limite de ${MAX_PAGINAS_MEMBROS} páginas (${MAX_PAGINAS_MEMBROS * MEMBROS_POR_PAGINA} contatos). Use a busca para refinar.</p>`;
+  }
+
+  dom.membrosPagination.innerHTML = html;
+
+  dom.membrosPagination.querySelectorAll('.page-btn[data-page]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const p = parseInt(el.getAttribute('data-page'), 10);
+      if (!Number.isNaN(p)) irParaPaginaMembros(p);
+    });
+  });
+}
+
 // ─── 📋 RENDERIZAR TABELA DE PARTICIPANTES ───
-function renderizarTabelaMembros(membros) {
+function renderizarTabelaMembros(membros, resetPagina = true) {
+  listaMembrosRenderizados = membros;
+  if (resetPagina) paginaAtualMembros = 1;
+
+  if (!tabelaMembrosExpandida) {
+    dom.membrosTableBody.innerHTML = '';
+    renderizarPaginacaoMembros(membros.length);
+    return;
+  }
+
+  dom.membrosTableWrapper?.classList.remove('collapsed');
   dom.membrosTableBody.innerHTML = '';
   
   if (membros.length === 0) {
@@ -585,10 +701,17 @@ function renderizarTabelaMembros(membros) {
         <td colspan="8" class="loading-td">Nenhum membro encontrado com os critérios de filtro informados.</td>
       </tr>
     `;
+    renderizarPaginacaoMembros(0);
     return;
   }
+
+  const totalPaginas = calcularPaginacaoMembros(membros.length);
+  if (paginaAtualMembros > totalPaginas) paginaAtualMembros = totalPaginas;
+
+  const inicio = (paginaAtualMembros - 1) * MEMBROS_POR_PAGINA;
+  const fatia = membros.slice(inicio, inicio + MEMBROS_POR_PAGINA);
   
-  membros.forEach(m => {
+  fatia.forEach(m => {
     let statusClass = 'badge-ativo';
     if (m.status.includes('Silencioso')) statusClass = 'badge-silencioso';
     if (m.status.includes('Fantasma') || m.status.includes('Inativo')) statusClass = 'badge-fantasma';
@@ -623,6 +746,8 @@ function renderizarTabelaMembros(membros) {
     `;
     dom.membrosTableBody.appendChild(tr);
   });
+
+  renderizarPaginacaoMembros(membros.length);
   
   // Adiciona listeners para os botões de Banimento manual
   document.querySelectorAll('.btn-ban-action').forEach(btn => {
@@ -678,7 +803,7 @@ dom.membroSearch.addEventListener('input', (e) => {
   const query = e.target.value.toLowerCase().trim();
   
   if (query === '') {
-    renderizarTabelaMembros(membrosGrupoCache);
+    renderizarTabelaMembros(membrosGrupoCache, true);
     return;
   }
   
@@ -687,8 +812,24 @@ dom.membroSearch.addEventListener('input', (e) => {
     (m.nome && m.nome.toLowerCase().includes(query))
   );
   
-  renderizarTabelaMembros(membrosFiltrados);
+  renderizarTabelaMembros(membrosFiltrados, true);
 });
+
+if (dom.btnToggleMembrosTable) {
+  dom.btnToggleMembrosTable.addEventListener('click', () => {
+    tabelaMembrosExpandida = !tabelaMembrosExpandida;
+    dom.membrosTableCard?.classList.toggle('table-collapsed', !tabelaMembrosExpandida);
+    dom.membrosTableWrapper?.classList.toggle('collapsed', !tabelaMembrosExpandida);
+    if (tabelaMembrosExpandida) {
+      dom.btnToggleMembrosTable.innerHTML = '<i class="fa-solid fa-chevron-up"></i> Recolher lista';
+      renderizarTabelaMembros(membrosGrupoCache, false);
+    } else {
+      dom.btnToggleMembrosTable.innerHTML = '<i class="fa-solid fa-chevron-down"></i> Expandir lista';
+      dom.membrosTableBody.innerHTML = '';
+      dom.membrosPagination?.classList.add('hidden');
+    }
+  });
+}
 
 // Atualização de filtros dropdown
 dom.filterDias.addEventListener('change', () => carregarEstatisticasGrupo(selectedGroupId));

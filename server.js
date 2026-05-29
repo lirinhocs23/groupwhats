@@ -858,7 +858,7 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             const botId = client.info.wid._serialized;
             const stats = await database.obterEstatisticasGrupo(usuarioId, groupId, 30, limite, chat.participants, botId, mensagensRecentes, client);
 
-            const fantasmas = stats.membrosList.filter(m => m.status === '👻 Fantasma' || m.totalMensagens < limite);
+            const fantasmas = database.filtrarFantasmas(stats.membrosList, limite);
 
             if (fantasmas.length === 0) {
               await msgFeedback.edit(`✅ Todos os membros comuns têm mais de ${limite} mensagens! Nenhum fantasma detectado.`);

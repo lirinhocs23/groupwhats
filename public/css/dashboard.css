@@ -889,6 +889,90 @@ body {
   font-style: italic;
 }
 
+.membros-list-meta {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  max-width: 520px;
+}
+
+.table-responsive.collapsed {
+  display: none;
+}
+
+.table-card.table-collapsed .membros-table thead {
+  opacity: 0.6;
+}
+
+.membros-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.membros-pagination.hidden {
+  display: none;
+}
+
+.pagination-info {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.pagination-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.page-btn {
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: var(--glass-hover);
+  border-color: var(--primary);
+}
+
+.page-btn.active {
+  background: rgba(125, 68, 255, 0.35);
+  border-color: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+
+.page-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.page-ellipsis {
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+
+.pagination-cap {
+  width: 100%;
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 /* Status Badges na Tabela */
 .table-badge {
   display: inline-block;

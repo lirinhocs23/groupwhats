@@ -319,10 +319,16 @@
         </div>
 
         <!-- Tabela Completa de Membros -->
-        <div class="glass-card table-card">
+        <div class="glass-card table-card" id="membros-table-card">
           <div class="table-header">
-            <h3>Lista Detalhada de Participantes</h3>
+            <div>
+              <h3>Lista Detalhada de Participantes</h3>
+              <p class="membros-list-meta" id="membros-list-meta">Selecione um grupo para carregar a lista.</p>
+            </div>
             <div class="table-actions-wrapper">
+              <button type="button" id="btn-toggle-membros-table" class="btn-secondary-mini" title="Recolher ou expandir a tabela">
+                <i class="fa-solid fa-chevron-up"></i> Recolher lista
+              </button>
               <button id="btn-export-csv" class="btn-secondary-mini"><i class="fa-solid fa-file-csv"></i> Exportar CSV</button>
               <div class="table-search-box">
                 <i class="fa-solid fa-magnifying-glass"></i>
@@ -330,7 +336,7 @@
               </div>
             </div>
           </div>
-          <div class="table-responsive">
+          <div class="table-responsive" id="membros-table-wrapper">
             <table class="membros-table" id="membros-table">
               <thead>
                 <tr>
@@ -351,6 +357,7 @@
               </tbody>
             </table>
           </div>
+          <div class="membros-pagination hidden" id="membros-pagination" aria-label="Paginação da lista de membros"></div>
         </div>
 
         <!-- Central de Logs de Segurança ao Vivo (Sticky Bottom Panel) -->

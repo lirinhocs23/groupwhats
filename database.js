@@ -481,13 +481,51 @@ async function obterEstatisticasGrupo(usuarioId, groupId, diasInativoDefault = 3
     .sort((a, b) => b.totalMensagens - a.totalMensagens)
     .slice(0, 10); // Top 10 mais ativos
 
+  membrosList.sort((a, b) => {
+    const ordemStatus = (s) => {
+      if (s.includes('Fantasma')) return 0;
+      if (s.includes('Inativo')) return 1;
+      if (s.includes('Silencioso')) return 2;
+      return 3;
+    };
+    const ds = ordemStatus(a.status) - ordemStatus(b.status);
+    if (ds !== 0) return ds;
+    return (a.nome || a.numero).localeCompare(b.nome || b.numero, 'pt-BR');
+  });
+
+  let adminsExcluidos = 0;
+  let botExcluido = 0;
+  if (participantesDoGrupo && participantesDoGrupo.length > 0) {
+    for (const p of participantesDoGrupo) {
+      const pid = p.id._serialized;
+      if (botId && pid === botId) botExcluido = 1;
+      else if (p.isAdmin || p.isSuperAdmin) adminsExcluidos++;
+    }
+  }
+
+  const fantasmasComLimite = filtrarFantasmas(membrosList, limiteSilenciosoDefault);
+
   return {
     nomeGrupo,
     totais: {
       ativos,
       silenciosos,
       fantasmas,
-      total: membrosList.length
+      total: membrosList.length,
+      /** Mesma regra do comando /fantasmas [limite] */
+      fantasmasComLimite: fantasmasComLimite.length
+    },
+    meta: {
+      fonte: participantesDoGrupo && participantesDoGrupo.length > 0 ? 'whatsapp' : 'banco_local',
+      totalNoGrupoWhatsApp: participantesDoGrupo ? participantesDoGrupo.length : null,
+      adminsExcluidos,
+      botExcluido,
+      membrosExibidos: membrosList.length,
+      limiteFantasmas: limiteSilenciosoDefault,
+      diasInatividade: diasInativoDefault,
+      aviso: participantesDoGrupo && participantesDoGrupo.length > 0
+        ? null
+        : 'Bot offline ou sem acesso ao grupo: lista pode estar incompleta (só quem já foi registrado no banco).'
     },
     ranking,
     membrosList,
@@ -495,6 +533,17 @@ async function obterEstatisticasGrupo(usuarioId, groupId, diasInativoDefault = 3
     linksPermitidos: (grupo && grupo.linksPermitidos) || [],
     moderacaoAtiva: !!(grupo && grupo.moderacaoAtiva)
   };
+}
+
+/**
+ * Mesma lógica do comando /fantasmas: 0 mensagens ou abaixo do limite informado.
+ */
+function filtrarFantasmas(membrosList, limite) {
+  const n = parseInt(limite, 10);
+  const lim = Number.isFinite(n) ? n : 3;
+  return (membrosList || []).filter(
+    (m) => m.status === '👻 Fantasma' || m.totalMensagens < lim
+  );
 }
 
 /**
@@ -621,6 +670,7 @@ module.exports = {
   salvarModeracaoAtiva,
   salvarLinksPermitidos,
   podarBanco,
+  filtrarFantasmas,
   obterGrupos,
   obterEstatisticasGrupo
 };
