@@ -284,6 +284,8 @@ async function obterEstatisticasGrupo(usuarioId, groupId, diasInativoDefault = 3
   let ativos = 0;
   let silenciosos = 0;
   let fantasmas = 0;
+  let fantasmasZeroMsg = 0;
+  let inativosPeriodo = 0;
 
   // Processa as mensagens recentes buscadas em tempo real do WhatsApp para backfill instantâneo
   const contagemRecente = {};
@@ -453,9 +455,11 @@ async function obterEstatisticasGrupo(usuarioId, groupId, diasInativoDefault = 3
     if (totalMsg === 0) {
       status = '👻 Fantasma';
       fantasmas++;
+      fantasmasZeroMsg++;
     } else if (ultimaMsg && diasSemFalar >= diasInativoDefault) {
       status = '👻 Inativo';
       fantasmas++;
+      inativosPeriodo++;
     } else if (totalMsg <= limiteSilenciosoDefault) {
       status = '🤫 Silencioso';
       silenciosos++;
@@ -511,8 +515,9 @@ async function obterEstatisticasGrupo(usuarioId, groupId, diasInativoDefault = 3
       ativos,
       silenciosos,
       fantasmas,
+      fantasmasZeroMsg,
+      inativosPeriodo,
       total: membrosList.length,
-      /** Mesma regra do comando /fantasmas [limite] */
       fantasmasComLimite: fantasmasComLimite.length
     },
     meta: {
@@ -544,6 +549,28 @@ function filtrarFantasmas(membrosList, limite) {
   return (membrosList || []).filter(
     (m) => m.status === '👻 Fantasma' || m.totalMensagens < lim
   );
+}
+
+/** Filtros do painel web (mesmas categorias exibidas ao admin). */
+function filtrarMembrosPainel(membrosList, filtro, limite) {
+  const lista = membrosList || [];
+  const n = parseInt(limite, 10);
+  const lim = Number.isFinite(n) ? n : 3;
+
+  switch (filtro) {
+    case 'ativos':
+      return lista.filter((m) => m.status.includes('Ativo'));
+    case 'observadores':
+      return lista.filter((m) => m.status.includes('Silencioso'));
+    case 'fantasma':
+      return lista.filter((m) => m.status === '👻 Fantasma');
+    case 'inativos':
+      return lista.filter((m) => m.status.includes('Inativo'));
+    case 'fantasmas_cmd':
+      return filtrarFantasmas(lista, lim);
+    default:
+      return lista;
+  }
 }
 
 /**
@@ -671,6 +698,7 @@ module.exports = {
   salvarLinksPermitidos,
   podarBanco,
   filtrarFantasmas,
+  filtrarMembrosPainel,
   obterGrupos,
   obterEstatisticasGrupo
 };

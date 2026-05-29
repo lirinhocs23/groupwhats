@@ -240,34 +240,46 @@
           </div>
         </div>
 
+        <div id="group-honesty-banner" class="group-honesty-banner hidden" role="status"></div>
+
         <!-- Grid de Cards de Estatísticas Rápidas -->
-        <div class="stats-grid">
+        <div class="stats-grid stats-grid-honest">
           <div class="glass-card stat-card border-blue">
             <div class="stat-icon bg-blue"><i class="fa-solid fa-users"></i></div>
             <div class="stat-data">
               <h3 id="stat-total-membros">0</h3>
-              <span>Total Analisado</span>
+              <span>Total listado</span>
+              <small id="stat-total-hint" class="stat-hint"></small>
             </div>
           </div>
           <div class="glass-card stat-card border-green">
             <div class="stat-icon bg-green"><i class="fa-solid fa-fire"></i></div>
             <div class="stat-data">
               <h3 id="stat-ativos">0</h3>
-              <span>Membros Ativos</span>
+              <span>Membros ativos</span>
             </div>
           </div>
           <div class="glass-card stat-card border-yellow">
             <div class="stat-icon bg-yellow"><i class="fa-solid fa-comment-slash"></i></div>
             <div class="stat-data">
               <h3 id="stat-silenciosos">0</h3>
-              <span>Observadores (Silenciosos)</span>
+              <span>Observadores</span>
             </div>
           </div>
           <div class="glass-card stat-card border-red">
             <div class="stat-icon bg-red"><i class="fa-solid fa-ghost"></i></div>
             <div class="stat-data">
-              <h3 id="stat-fantasmas">0</h3>
-              <span>Fantasmas / Inativos</span>
+              <h3 id="stat-fantasmas-zero">0</h3>
+              <span>0 mensagens (fantasma)</span>
+              <small class="stat-hint">Desde que o bot monitora</small>
+            </div>
+          </div>
+          <div class="glass-card stat-card border-orange">
+            <div class="stat-icon bg-orange"><i class="fa-solid fa-clock"></i></div>
+            <div class="stat-data">
+              <h3 id="stat-fantasmas-cmd">0</h3>
+              <span id="stat-fantasmas-cmd-label">≤ 3 msgs (/fantasmas)</span>
+              <small id="stat-fantasmas-breakdown" class="stat-hint">0 inativos no período</small>
             </div>
           </div>
         </div>
@@ -326,6 +338,9 @@
               <p class="membros-list-meta" id="membros-list-meta">Selecione um grupo para carregar a lista.</p>
             </div>
             <div class="table-actions-wrapper">
+              <button type="button" id="btn-ban-bulk" class="btn-danger-mini hidden" title="Remover selecionados do grupo">
+                <i class="fa-solid fa-user-slash"></i> Banir selecionados (<span id="bulk-ban-count">0</span>)
+              </button>
               <button type="button" id="btn-toggle-membros-table" class="btn-secondary-mini" title="Recolher ou expandir a tabela">
                 <i class="fa-solid fa-chevron-up"></i> Recolher lista
               </button>
@@ -336,10 +351,21 @@
               </div>
             </div>
           </div>
+          <div class="membros-status-filters" id="membros-status-filters" role="toolbar" aria-label="Filtrar por status">
+            <button type="button" class="filter-chip active" data-filter="todos">Todos</button>
+            <button type="button" class="filter-chip" data-filter="ativos">🔥 Ativos</button>
+            <button type="button" class="filter-chip" data-filter="observadores">👀 Observadores</button>
+            <button type="button" class="filter-chip" data-filter="fantasma">👻 0 msgs</button>
+            <button type="button" class="filter-chip" data-filter="inativos">⏳ Inativos</button>
+            <button type="button" class="filter-chip" data-filter="fantasmas_cmd">👻 ≤ limite (/fantasmas)</button>
+          </div>
           <div class="table-responsive" id="membros-table-wrapper">
             <table class="membros-table" id="membros-table">
               <thead>
                 <tr>
+                  <th class="th-checkbox">
+                    <input type="checkbox" id="membros-select-all" title="Selecionar página atual" aria-label="Selecionar todos da página">
+                  </th>
                   <th>Contato</th>
                   <th>Nome WhatsApp</th>
                   <th>Mensagens</th>
@@ -352,7 +378,7 @@
               </thead>
               <tbody id="membros-table-body">
                 <tr>
-                  <td colspan="8" class="loading-td">Carregando dados dos membros...</td>
+                  <td colspan="9" class="loading-td">Carregando dados dos membros...</td>
                 </tr>
               </tbody>
             </table>

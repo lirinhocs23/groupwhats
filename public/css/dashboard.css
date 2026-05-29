@@ -736,6 +736,124 @@ body {
   margin-bottom: 25px;
 }
 
+.stats-grid-honest {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.stat-data .stat-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.3;
+  font-weight: 400;
+}
+
+.stat-card.border-orange {
+  border-left: 3px solid #ff6b35;
+}
+
+.stat-icon.bg-orange {
+  background: rgba(255, 107, 53, 0.15);
+  color: #ff6b35;
+}
+
+.group-honesty-banner {
+  margin-bottom: 20px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 184, 0, 0.25);
+  background: rgba(255, 184, 0, 0.06);
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.group-honesty-banner p {
+  margin: 0 0 8px;
+}
+
+.group-honesty-banner p:last-child {
+  margin-bottom: 0;
+}
+
+.group-honesty-banner code {
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.membros-status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 20px 14px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.filter-chip {
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: var(--font-main);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.filter-chip:hover {
+  background: var(--glass-hover);
+  color: var(--text-primary);
+}
+
+.filter-chip.active {
+  background: rgba(125, 68, 255, 0.3);
+  border-color: var(--accent-purple);
+  color: #fff;
+  font-weight: 600;
+}
+
+.th-checkbox,
+.td-checkbox {
+  width: 40px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.th-checkbox input,
+.td-checkbox input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent-purple);
+}
+
+.btn-danger-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 56, 56, 0.4);
+  background: rgba(255, 56, 56, 0.15);
+  color: #ff6b6b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-danger-mini:hover {
+  background: rgba(255, 56, 56, 0.28);
+}
+
+.btn-danger-mini.hidden {
+  display: none !important;
+}
+
 .stat-card {
   display: flex;
   align-items: center;
@@ -1243,7 +1361,8 @@ body {
 }
 
 @media (max-width: 1200px) {
-  .stats-grid {
+  .stats-grid,
+  .stats-grid-honest {
     grid-template-columns: repeat(2, 1fr);
   }
   .charts-grid {

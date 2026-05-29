@@ -19,6 +19,8 @@ let statsMetaCache = null;
 let paginaAtualMembros = 1;
 let listaMembrosRenderizados = [];
 let tabelaMembrosExpandida = true;
+let filtroStatusAtual = 'todos';
+let membrosSelecionados = new Set();
 const MEMBROS_POR_PAGINA = 50;
 const MAX_PAGINAS_MEMBROS = 500;
 
@@ -76,9 +78,18 @@ const dom = {
   
   // Counters
   statTotalMembros: document.getElementById('stat-total-membros'),
+  statTotalHint: document.getElementById('stat-total-hint'),
   statAtivos: document.getElementById('stat-ativos'),
   statSilenciosos: document.getElementById('stat-silenciosos'),
-  statFantasmas: document.getElementById('stat-fantasmas'),
+  statFantasmasZero: document.getElementById('stat-fantasmas-zero'),
+  statFantasmasCmd: document.getElementById('stat-fantasmas-cmd'),
+  statFantasmasCmdLabel: document.getElementById('stat-fantasmas-cmd-label'),
+  statFantasmasBreakdown: document.getElementById('stat-fantasmas-breakdown'),
+  groupHonestyBanner: document.getElementById('group-honesty-banner'),
+  membrosStatusFilters: document.getElementById('membros-status-filters'),
+  membrosSelectAll: document.getElementById('membros-select-all'),
+  btnBanBulk: document.getElementById('btn-ban-bulk'),
+  bulkBanCount: document.getElementById('bulk-ban-count'),
   
   // Moderação
   membroSearch: document.getElementById('membro-search'),
@@ -398,6 +409,12 @@ async function carregarGrupos() {
 // Selecionar grupo e exibir dados
 function selecionarGrupo(groupId) {
   selectedGroupId = groupId;
+  filtroStatusAtual = 'todos';
+  membrosSelecionados.clear();
+  atualizarContadorBanLote();
+  dom.membrosStatusFilters?.querySelectorAll('.filter-chip').forEach((chip) => {
+    chip.classList.toggle('active', chip.getAttribute('data-filter') === 'todos');
+  });
   dom.emptyStateSection.classList.add('hidden');
   dom.groupDetailsSection.classList.remove('hidden');
   
@@ -417,7 +434,7 @@ async function carregarEstatisticasGrupo(groupId, silenciarFeedback = false) {
     // Exibe placeholder de loading na tabela
     dom.membrosTableBody.innerHTML = `
       <tr>
-        <td colspan="8" class="loading-td"><i class="fa-solid fa-spinner fa-spin"></i> Atualizando dados analíticos...</td>
+        <td colspan="9" class="loading-td"><i class="fa-solid fa-spinner fa-spin"></i> Atualizando dados analíticos...</td>
       </tr>
     `;
   }
@@ -432,7 +449,29 @@ async function carregarEstatisticasGrupo(groupId, silenciarFeedback = false) {
     animarContador(dom.statTotalMembros, stats.totais.total);
     animarContador(dom.statAtivos, stats.totais.ativos);
     animarContador(dom.statSilenciosos, stats.totais.silenciosos);
-    animarContador(dom.statFantasmas, stats.totais.fantasmas);
+    animarContador(dom.statFantasmasZero, stats.totais.fantasmasZeroMsg ?? 0);
+    animarContador(dom.statFantasmasCmd, stats.totais.fantasmasComLimite ?? 0);
+
+    const limiteCfg = stats.meta?.limiteFantasmas ?? limite;
+    const inativosPeriodo = stats.totais.inativosPeriodo ?? 0;
+    if (dom.statFantasmasCmdLabel) {
+      dom.statFantasmasCmdLabel.textContent = `≤ ${limiteCfg} msgs (/fantasmas)`;
+    }
+    if (dom.statFantasmasBreakdown) {
+      dom.statFantasmasBreakdown.textContent = `${inativosPeriodo} inativo(s) no período · ${stats.totais.fantasmas ?? 0} fantasma+inativo no total`;
+    }
+    if (dom.statTotalHint) {
+      const meta = stats.meta || {};
+      if (meta.totalNoGrupoWhatsApp != null && meta.totalNoGrupoWhatsApp !== stats.totais.total) {
+        dom.statTotalHint.textContent = `${meta.totalNoGrupoWhatsApp} no WhatsApp`;
+      } else if (meta.fonte === 'banco_local') {
+        dom.statTotalHint.textContent = 'lista parcial (banco local)';
+      } else {
+        dom.statTotalHint.textContent = '';
+      }
+    }
+
+    atualizarBannerHonestidade(stats);
     
     // Atualiza gráficos
     atualizarGraficos(stats);
@@ -447,8 +486,10 @@ async function carregarEstatisticasGrupo(groupId, silenciarFeedback = false) {
     membrosGrupoCache = stats.membrosList || [];
     statsMetaCache = stats.meta || null;
     paginaAtualMembros = 1;
+    membrosSelecionados.clear();
+    atualizarContadorBanLote();
     atualizarMetaListaMembros(stats);
-    renderizarTabelaMembros(membrosGrupoCache);
+    aplicarFiltrosMembros(false);
     
   } catch (err) {
     console.error('❌ Erro ao carregar estatísticas:', err.message);
@@ -490,9 +531,9 @@ function inicializarGraficos() {
       foreColor: '#a49fc6',
       animations: { enabled: true, easing: 'easeinout', speed: 800 }
     },
-    labels: ['Ativos', 'Observadores', 'Fantasmas'],
-    colors: ['#00ff87', '#ffb800', '#ff3838'],
-    series: [0, 0, 0],
+    labels: ['Ativos', 'Observadores', '0 mensagens', 'Inativos'],
+    colors: ['#00ff87', '#ffb800', '#ff3838', '#ff6b35'],
+    series: [0, 0, 0, 0],
     dataLabels: { enabled: false },
     stroke: { colors: ['#0f0c1b'], width: 3 },
     legend: { position: 'bottom' },
@@ -573,7 +614,8 @@ function atualizarGraficos(stats) {
   chartPie.updateSeries([
     stats.totais.ativos,
     stats.totais.silenciosos,
-    stats.totais.fantasmas
+    stats.totais.fantasmasZeroMsg ?? 0,
+    stats.totais.inativosPeriodo ?? 0
   ]);
   
   // Gráfico Barras (Ranking)
@@ -612,6 +654,91 @@ function atualizarMetaListaMembros(stats) {
     dom.membrosListMeta.title = meta.aviso;
   } else {
     dom.membrosListMeta.title = '';
+  }
+}
+
+function filtrarPorStatus(membros, filtro, limite) {
+  const lista = membros || [];
+  const n = parseInt(limite, 10);
+  const lim = Number.isFinite(n) ? n : 3;
+
+  switch (filtro) {
+    case 'ativos':
+      return lista.filter((m) => m.status.includes('Ativo'));
+    case 'observadores':
+      return lista.filter((m) => m.status.includes('Silencioso'));
+    case 'fantasma':
+      return lista.filter((m) => m.status === '👻 Fantasma');
+    case 'inativos':
+      return lista.filter((m) => m.status.includes('Inativo'));
+    case 'fantasmas_cmd':
+      return lista.filter((m) => m.status === '👻 Fantasma' || m.totalMensagens < lim);
+    default:
+      return lista;
+  }
+}
+
+function aplicarFiltrosMembros(resetPagina = true) {
+  const query = dom.membroSearch?.value.toLowerCase().trim() || '';
+  let lista = membrosGrupoCache;
+
+  if (query) {
+    lista = lista.filter(
+      (m) =>
+        m.numero.toLowerCase().includes(query) ||
+        (m.nome && m.nome.toLowerCase().includes(query))
+    );
+  }
+
+  lista = filtrarPorStatus(lista, filtroStatusAtual, dom.filterLimite?.value ?? 3);
+  renderizarTabelaMembros(lista, resetPagina);
+}
+
+function atualizarBannerHonestidade(stats) {
+  if (!dom.groupHonestyBanner) return;
+
+  const meta = stats.meta || {};
+  const partes = [];
+
+  partes.push(
+    '<strong>Transparência:</strong> “Fantasma” = 0 mensagens desde que o bot monitora (não dá para saber quem só lê o grupo).'
+  );
+
+  if (meta.fonte === 'banco_local') {
+    partes.push(
+      '⚠️ WhatsApp desconectado — lista parcial (só quem já apareceu no banco). Conecte o bot para ver todos os participantes.'
+    );
+  } else {
+    partes.push('Lista ao vivo do WhatsApp (admins e o próprio bot ficam ocultos na contagem).');
+  }
+
+  if (meta.adminsExcluidos > 0) {
+    partes.push(`${meta.adminsExcluidos} administrador(es) oculto(s) da lista.`);
+  }
+  if (meta.botExcluido) {
+    partes.push('O número do bot não entra na lista.');
+  }
+  if (meta.totalNoGrupoWhatsApp != null && meta.membrosExibidos != null) {
+    const diff = meta.totalNoGrupoWhatsApp - meta.membrosExibidos - (meta.adminsExcluidos || 0) - (meta.botExcluido ? 1 : 0);
+    if (diff > 0) {
+      partes.push(`${diff} participante(s) ainda sem registro de mensagens no banco.`);
+    }
+  }
+
+  const limiteCfg = meta.limiteFantasmas ?? dom.filterLimite?.value ?? 3;
+  partes.push(
+    `O filtro “≤ limite (/fantasmas)” e o card laranja usam a mesma regra do comando <code>/fantasmas ${limiteCfg}</code>.`
+  );
+
+  dom.groupHonestyBanner.innerHTML = partes.map((p) => `<p>${p}</p>`).join('');
+  dom.groupHonestyBanner.classList.remove('hidden');
+}
+
+function atualizarContadorBanLote() {
+  const n = membrosSelecionados.size;
+  if (dom.bulkBanCount) dom.bulkBanCount.textContent = String(n);
+  if (dom.btnBanBulk) {
+    dom.btnBanBulk.classList.toggle('hidden', n === 0);
   }
 }
 
@@ -698,9 +825,10 @@ function renderizarTabelaMembros(membros, resetPagina = true) {
   if (membros.length === 0) {
     dom.membrosTableBody.innerHTML = `
       <tr>
-        <td colspan="8" class="loading-td">Nenhum membro encontrado com os critérios de filtro informados.</td>
+        <td colspan="9" class="loading-td">Nenhum membro encontrado com os critérios de filtro informados.</td>
       </tr>
     `;
+    if (dom.membrosSelectAll) dom.membrosSelectAll.checked = false;
     renderizarPaginacaoMembros(0);
     return;
   }
@@ -710,7 +838,8 @@ function renderizarTabelaMembros(membros, resetPagina = true) {
 
   const inicio = (paginaAtualMembros - 1) * MEMBROS_POR_PAGINA;
   const fatia = membros.slice(inicio, inicio + MEMBROS_POR_PAGINA);
-  
+  let todosPaginaSelecionados = fatia.length > 0;
+
   fatia.forEach(m => {
     let statusClass = 'badge-ativo';
     if (m.status.includes('Silencioso')) statusClass = 'badge-silencioso';
@@ -723,7 +852,13 @@ function renderizarTabelaMembros(membros, resetPagina = true) {
     if (adv === 1) warningClass = 'warning-1';
     if (adv >= 2) warningClass = 'warning-2';
 
+    const checked = membrosSelecionados.has(m.numero);
+    if (!checked) todosPaginaSelecionados = false;
+
     tr.innerHTML = `
+      <td class="td-checkbox">
+        <input type="checkbox" class="membro-row-check" data-num="${m.numero}" ${checked ? 'checked' : ''} aria-label="Selecionar ${m.numero}">
+      </td>
       <td style="font-weight: 500; color: #fff;">${m.numero}</td>
       <td>${m.nome || '-'}</td>
       <td style="font-weight: 600;">${m.totalMensagens}</td>
@@ -747,8 +882,21 @@ function renderizarTabelaMembros(membros, resetPagina = true) {
     dom.membrosTableBody.appendChild(tr);
   });
 
+  if (dom.membrosSelectAll) {
+    dom.membrosSelectAll.checked = todosPaginaSelecionados;
+  }
+
   renderizarPaginacaoMembros(membros.length);
   
+  document.querySelectorAll('.membro-row-check').forEach((cb) => {
+    cb.addEventListener('change', (e) => {
+      const num = e.target.getAttribute('data-num');
+      if (e.target.checked) membrosSelecionados.add(num);
+      else membrosSelecionados.delete(num);
+      atualizarContadorBanLote();
+    });
+  });
+
   // Adiciona listeners para os botões de Banimento manual
   document.querySelectorAll('.btn-ban-action').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -786,7 +934,8 @@ async function banirMembroManual(numero) {
       const data = await response.json();
       if (response.ok && data.success) {
         alert(`✅ Sucesso: O contato ${numero} foi banido do grupo com sucesso!`);
-        // Recarrega as estatísticas do grupo para atualizar a tabela na hora
+        membrosSelecionados.delete(numero);
+        atualizarContadorBanLote();
         carregarEstatisticasGrupo(selectedGroupId);
       } else {
         alert(`❌ Erro ao banir: ${data.error || 'Erro desconhecido'}`);
@@ -798,22 +947,82 @@ async function banirMembroManual(numero) {
   }
 }
 
-// ─── 🔍 FILTRAR TABELA EM TEMPO REAL ───
-dom.membroSearch.addEventListener('input', (e) => {
-  const query = e.target.value.toLowerCase().trim();
-  
-  if (query === '') {
-    renderizarTabelaMembros(membrosGrupoCache, true);
-    return;
+async function banirMembrosEmLote() {
+  const numeros = Array.from(membrosSelecionados);
+  if (numeros.length === 0) return;
+
+  const msg =
+    numeros.length === 1
+      ? `Remover ${numeros[0]} do grupo?`
+      : `Remover ${numeros.length} contatos do grupo?\n\n${numeros.slice(0, 8).join(', ')}${numeros.length > 8 ? '…' : ''}`;
+
+  if (!confirm(`⚠️ BANIMENTO EM LOTE\n\n${msg}\n\nEsta ação é imediata via WhatsApp.`)) return;
+
+  try {
+    const response = await fetch('/api/ban/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        usuarioId: currentUser.id,
+        groupId: selectedGroupId,
+        numeros
+      })
+    });
+
+    const data = await response.json();
+    if (response.ok) {
+      alert(
+        data.falhas === 0
+          ? `✅ ${data.removidos} contato(s) removido(s) com sucesso.`
+          : `⚠️ ${data.removidos} removido(s), ${data.falhas} falha(s). Veja o console para detalhes.`
+      );
+      if (data.falhas > 0) console.warn('Banimento em lote — falhas:', data.resultados?.filter((r) => !r.ok));
+      numeros.forEach((n) => membrosSelecionados.delete(n));
+      atualizarContadorBanLote();
+      carregarEstatisticasGrupo(selectedGroupId);
+    } else {
+      alert(`❌ Erro: ${data.error || 'Falha no banimento em lote'}`);
+    }
+  } catch (err) {
+    console.error(err);
+    alert('❌ Erro de rede ao banir em lote.');
   }
-  
-  const membrosFiltrados = membrosGrupoCache.filter(m => 
-    m.numero.toLowerCase().includes(query) || 
-    (m.nome && m.nome.toLowerCase().includes(query))
-  );
-  
-  renderizarTabelaMembros(membrosFiltrados, true);
+}
+
+// ─── 🔍 FILTRAR TABELA EM TEMPO REAL ───
+dom.membroSearch.addEventListener('input', () => {
+  aplicarFiltrosMembros(true);
 });
+
+if (dom.membrosStatusFilters) {
+  dom.membrosStatusFilters.querySelectorAll('.filter-chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      filtroStatusAtual = chip.getAttribute('data-filter') || 'todos';
+      dom.membrosStatusFilters.querySelectorAll('.filter-chip').forEach((c) => c.classList.remove('active'));
+      chip.classList.add('active');
+      aplicarFiltrosMembros(true);
+    });
+  });
+}
+
+if (dom.membrosSelectAll) {
+  dom.membrosSelectAll.addEventListener('change', (e) => {
+    const inicio = (paginaAtualMembros - 1) * MEMBROS_POR_PAGINA;
+    const fatia = listaMembrosRenderizados.slice(inicio, inicio + MEMBROS_POR_PAGINA);
+    fatia.forEach((m) => {
+      if (e.target.checked) membrosSelecionados.add(m.numero);
+      else membrosSelecionados.delete(m.numero);
+    });
+    document.querySelectorAll('.membro-row-check').forEach((cb) => {
+      cb.checked = e.target.checked;
+    });
+    atualizarContadorBanLote();
+  });
+}
+
+if (dom.btnBanBulk) {
+  dom.btnBanBulk.addEventListener('click', () => banirMembrosEmLote());
+}
 
 if (dom.btnToggleMembrosTable) {
   dom.btnToggleMembrosTable.addEventListener('click', () => {
@@ -822,7 +1031,7 @@ if (dom.btnToggleMembrosTable) {
     dom.membrosTableWrapper?.classList.toggle('collapsed', !tabelaMembrosExpandida);
     if (tabelaMembrosExpandida) {
       dom.btnToggleMembrosTable.innerHTML = '<i class="fa-solid fa-chevron-up"></i> Recolher lista';
-      renderizarTabelaMembros(membrosGrupoCache, false);
+      aplicarFiltrosMembros(false);
     } else {
       dom.btnToggleMembrosTable.innerHTML = '<i class="fa-solid fa-chevron-down"></i> Expandir lista';
       dom.membrosTableBody.innerHTML = '';
@@ -1092,13 +1301,14 @@ async function processarArquivoIA(file) {
 
 // ─── 📥 EXPORTADOR CSV PROFISSIONAL ───
 document.getElementById('btn-export-csv').addEventListener('click', () => {
-  if (membrosGrupoCache.length === 0) {
+  const exportList = listaMembrosRenderizados.length > 0 ? listaMembrosRenderizados : membrosGrupoCache;
+  if (exportList.length === 0) {
     alert('Nenhum dado disponível para exportar.');
     return;
   }
   
   const headers = ['Número', 'Nome do WhatsApp', 'Mensagens', 'Última Interação', 'Dias Sem Falar', 'Advertências', 'Status'];
-  const rows = membrosGrupoCache.map(m => [
+  const rows = exportList.map(m => [
     m.numero,
     m.nome || '',
     m.totalMensagens,

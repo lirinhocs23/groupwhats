@@ -1604,6 +1604,58 @@ app.post('/api/ban', async (req, res) => {
   }
 });
 
+// Banimento em lote pelo painel (máx. 50 por requisição)
+app.post('/api/ban/bulk', async (req, res) => {
+  const { usuarioId, groupId, numeros } = req.body;
+  if (!usuarioId || !groupId || !Array.isArray(numeros) || numeros.length === 0) {
+    return res.status(400).json({ error: 'usuarioId, groupId e numeros[] são obrigatórios!' });
+  }
+  if (numeros.length > 50) {
+    return res.status(400).json({ error: 'Máximo de 50 contatos por vez.' });
+  }
+
+  try {
+    const sessao = sessoesAtivas[usuarioId];
+    if (!sessao || sessao.status !== 'conectado') {
+      return res.status(400).json({ error: 'O bot de WhatsApp não está conectado!' });
+    }
+
+    const chat = await sessao.client.getChatById(groupId);
+    if (!chat.isGroup) {
+      return res.status(400).json({ error: 'O chat informado não é um grupo!' });
+    }
+
+    const resultados = [];
+    for (const raw of numeros) {
+      const numero = String(raw || '').replace(/\D/g, '');
+      if (!numero) {
+        resultados.push({ numero: raw, ok: false, error: 'Número inválido' });
+        continue;
+      }
+      const participanteId = `${numero}@c.us`;
+      try {
+        await chat.removeParticipants([participanteId]);
+        await database.zerarAdvertencias(usuarioId, groupId, participanteId);
+        resultados.push({ numero, ok: true });
+      } catch (err) {
+        resultados.push({ numero, ok: false, error: err.message });
+      }
+    }
+
+    const ok = resultados.filter((r) => r.ok).length;
+    const falhas = resultados.length - ok;
+    res.json({
+      success: falhas === 0,
+      removidos: ok,
+      falhas,
+      resultados
+    });
+  } catch (err) {
+    console.error('❌ Erro no banimento em lote:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Rota para zerar/perdoar advertências
 app.post('/api/warnings/reset', async (req, res) => {
   const { usuarioId, groupId, numero } = req.body;
