@@ -325,7 +325,8 @@ function avaliarTexto(corpo, opts = {}) {
           permitido: false,
           camada: 'custom',
           motivo: `termo proibido personalizado ("${termo}")`,
-          bloqueiaIA: false
+          /** Termos do painel = regra do admin; não revalidar com Gemini (evita liberar Heineken, cerveja, etc.) */
+          bloqueiaIA: true
         };
       }
     }

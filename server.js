@@ -1126,7 +1126,16 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
             });
           }
 
-          if (contemSpam && temChavesGemini() && !avaliacao.bloqueiaIA) {
+          const termoPainelSemIA =
+            avaliacao.camada === 'custom' ||
+            avaliacao.bloqueiaIA === true ||
+            /termo proibido personalizado/i.test(String(motivoSpam || ''));
+
+          if (contemSpam && termoPainelSemIA) {
+            console.log(`🛡️ [Moderador] Termo do painel — bloqueio direto, sem Gemini: ${motivoSpam}`);
+          }
+
+          if (contemSpam && temChavesGemini() && !termoPainelSemIA) {
             console.log(`🤖 [Moderador IA] Verificando contexto do texto de ${participanteId} com Gemini para evitar falso positivo...`);
             const resultadoIA = await analisarTextoComIA(corpo);
             if (resultadoIA === 'FALHA') {
@@ -1790,6 +1799,7 @@ io.on('connection', (socket) => {
 server.listen(PORT, async () => {
   console.log(`====================================================`);
   console.log(`🚀 PAINEL WEB SAAS INICIADO COM SUCESSO!`);
+  console.log(`🛡️ Moderação: termos salvos no painel NÃO passam pela IA (bloqueio direto)`);
   console.log(`🌐 Endereço Local: http://localhost:${PORT}`);
   const qtdChavesGemini = getGeminiKeys().length;
   const modelosGemini = getGeminiModels();
