@@ -46,13 +46,19 @@ function podarIdsProcessados(set, maxSize = 1000, keepSize = 500) {
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
+    executablePath: '/usr/bin/chromium-browser',
     headless: true,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--disable-backgrounding-occluded-windows',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--disable-background-networking',
+      '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
-      '--disable-background-timer-throttling'
+      '--disable-features=TranslateUI',
+      '--disable-features=site-per-process'
     ]
   }
 });
