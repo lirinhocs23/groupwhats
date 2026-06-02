@@ -1000,7 +1000,11 @@ async function processarMensagemEntrada(usuarioId, client, msg) {
           // INTEGRAÇÃO DE CONTEXTO IA (VERIFICAÇÃO DE FALSOS POSITIVOS)
           // Se as listas de palavras (Regex) detectaram algo suspeito, pedimos a opinião da IA antes de punir
           // Mas se o motivo for "ofensa grave", NÃO PERDOAMOS.
-          if (contemSpam && getNextGeminiKey() && !motivoSpam.includes('ofensa grave')) {
+          const termoPainelSemIA =
+            /termo proibido personalizado/i.test(String(motivoSpam || '')) ||
+            /ofensa grave/i.test(String(motivoSpam || ''));
+
+          if (contemSpam && getNextGeminiKey() && !termoPainelSemIA) {
             console.log(`🤖 [Moderador IA] Verificando contexto do texto de ${participanteId} com Gemini para evitar falso positivo...`);
             const resultadoIA = await analisarTextoComIA(corpo, getNextGeminiKey());
             if (resultadoIA === 'NAO') {

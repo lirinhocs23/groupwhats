@@ -1,8 +1,10 @@
+require('dotenv').config();
 process.env.TZ = 'America/Sao_Paulo';
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs-extra');
 const dayjs = require('dayjs');
+const gemini = require('./src/geminiModeracao');
 const {
   avaliarTexto,
   obterIdPrivadoRemetente,
@@ -10,7 +12,10 @@ const {
   ehMensagemDeGrupo,
   resolverIdGrupo,
   deveProcessarMensagemAgora,
-  parseComando
+  parseComando,
+  ehFigurinhaWhatsApp,
+  deveAnalisarMidiaComIA,
+  mimetypeEhFigurinha
 } = require('./src/moderationRules');
 
 // Caminho do arquivo de atividade
@@ -40,6 +45,177 @@ function podarIdsProcessados(set, maxSize = 1000, keepSize = 500) {
   const manter = [...set].slice(-keepSize);
   set.clear();
   manter.forEach((id) => set.add(id));
+}
+
+function nomeGrupoNormalizado(nomeGrupo) {
+  return (nomeGrupo || '').toLowerCase().replace(/[\s_]+/g, '_');
+}
+
+/** Grupos com moderação automática (igual server.js: Espada + Fd teste). */
+function grupoEhModerado(nomeGrupo) {
+  const n = nomeGrupoNormalizado(nomeGrupo);
+  return (
+    n.includes('espada_ruadaestacao') ||
+    n.includes('espada_rua_da_estacao') ||
+    n === 'fd'
+  );
+}
+
+function grupoEhEspada(nomeGrupo) {
+  const n = nomeGrupoNormalizado(nomeGrupo);
+  return n.includes('espada');
+}
+
+const ultimosAvisosModeracao = {};
+
+/**
+ * Moderação anti-spam/ofensas + Gemini (texto e mídia).
+ * @returns {boolean} true se puniu e não deve registrar atividade
+ */
+async function moderarConteudoGrupo(msg, chat, nomeGrupo, userId, corpo) {
+  const { cmd: comando } = parseComando((corpo || '').trim());
+  if (!grupoEhModerado(nomeGrupo) || msg.fromMe || comando) return false;
+
+  let eAdmin = false;
+  try {
+    const participante = chat.participants.find((p) => p.id._serialized === userId);
+    if (participante && (participante.isAdmin || participante.isSuperAdmin)) {
+      eAdmin = true;
+    }
+  } catch (err) {
+    console.error('⚠️ Erro ao verificar admin na moderação:', err.message);
+  }
+  if (eAdmin) return false;
+
+  if (msg.hasMedia && ehFigurinhaWhatsApp(msg)) {
+    console.log(`🎭 [Moderador] Figurinha ignorada de ${userId}`);
+    return false;
+  }
+
+  if (deveAnalisarMidiaComIA(msg)) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+
+  const groupId = chat.id._serialized;
+  const termosCustom =
+    atividade[groupId]?.termosProibidos?.length > 0 ? atividade[groupId].termosProibidos : null;
+
+  const avaliacao = avaliarTexto(corpo, {
+    grupoEspada: grupoEhEspada(nomeGrupo),
+    termosCustomizados: termosCustom || undefined
+  });
+
+  let contemSpam = !avaliacao.permitido;
+  let motivoSpam = avaliacao.motivo || 'anúncio ou conteúdo proibido';
+
+  if (avaliacao.permitido && avaliacao.camada === 'frase' && avaliacao.motivo) {
+    console.log(`✅ [Moderador] Liberado: ${avaliacao.motivo}`);
+  }
+
+  const termoPainelSemIA =
+    avaliacao.camada === 'custom' ||
+    avaliacao.bloqueiaIA === true ||
+    /termo proibido personalizado/i.test(String(motivoSpam || ''));
+
+  if (contemSpam && termoPainelSemIA) {
+    console.log(`🛡️ [Moderador] Bloqueio direto (sem IA): ${motivoSpam}`);
+  }
+
+  if (contemSpam && gemini.temChavesGemini() && !termoPainelSemIA) {
+    console.log(`🤖 [Moderador IA] Verificando contexto: "${corpo.substring(0, 60)}"...`);
+    const resultadoIA = await gemini.analisarTextoComIA(corpo);
+    if (resultadoIA === 'FALHA') {
+      console.warn('⚠️ [Moderador IA] Indisponível — mantém bloqueio por palavra-chave.');
+    } else if (resultadoIA === 'NAO') {
+      console.log(`✅ [Moderador IA] Liberado (falso positivo de "${motivoSpam}")`);
+      contemSpam = false;
+      motivoSpam = '';
+    }
+  }
+
+  if (!contemSpam && deveAnalisarMidiaComIA(msg) && gemini.temChavesGemini()) {
+    try {
+      const media = await msg.downloadMedia();
+      if (media) {
+        if (mimetypeEhFigurinha(media.mimetype, msg)) {
+          console.log('🎭 [Moderador IA] Figurinha ignorada após download');
+        } else if (media.mimetype.startsWith('image/') || media.mimetype.startsWith('video/')) {
+          const tamanhoMB = (media.data.length * 0.75) / (1024 * 1024);
+          if (tamanhoMB > 10) {
+            console.log(`⚠️ [Moderador IA] Mídia ignorada por tamanho (${tamanhoMB.toFixed(1)}MB)`);
+          } else {
+            const tipo = media.mimetype.startsWith('image/') ? 'imagem' : 'vídeo';
+            console.log(`🤖 [Moderador IA] Analisando ${tipo} (${tamanhoMB.toFixed(2)}MB)...`);
+            const resultadoIA = await gemini.analisarImagemComIA(media.data, media.mimetype);
+            if (resultadoIA === 'SIM') {
+              contemSpam = true;
+              motivoSpam = `conteúdo visual impróprio (IA) no ${tipo}`;
+            } else if (resultadoIA === 'FALHA') {
+              console.warn(`⚠️ [Moderador IA] ${tipo} não analisada — Gemini indisponível.`);
+            } else {
+              console.log(`✅ [Moderador IA] ${tipo} liberada pela IA`);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('⚠️ Falha ao analisar mídia com IA:', err.message);
+    }
+  }
+
+  if (!contemSpam) return false;
+
+  console.log(`🚨 SPAM/CONTEÚDO PROIBIDO de ${userId} em "${nomeGrupo}": ${motivoSpam}`);
+
+  try {
+    await msg.delete(true);
+    console.log('🗑️ Mensagem apagada.');
+  } catch (err) {
+    console.error('❌ Erro ao apagar mensagem:', err.message);
+  }
+
+  if (!atividade[groupId]) {
+    atividade[groupId] = { nomeGrupo, membros: {} };
+  }
+  if (!atividade[groupId].advertencias) atividade[groupId].advertencias = {};
+  if (!atividade[groupId].advertencias[userId]) atividade[groupId].advertencias[userId] = 0;
+
+  const agora = Date.now();
+  const ultimo = ultimosAvisosModeracao[userId] || 0;
+  if (agora - ultimo < 3000) return true;
+  ultimosAvisosModeracao[userId] = agora;
+
+  atividade[groupId].advertencias[userId] += 1;
+  const advCount = atividade[groupId].advertencias[userId];
+  await salvarAtividade(atividade);
+
+  const contato = await msg.getContact();
+
+  if (advCount >= 3) {
+    try {
+      await chat.removeParticipants([userId]);
+      console.log(`🚫 Usuário ${userId} removido por 3 advertências.`);
+      await chat.sendMessage(
+        `🚫 @${contato.id.user} foi removido do grupo por atingir o limite de 3 advertências de conteúdo proibido.`,
+        { mentions: [contato] }
+      );
+      delete atividade[groupId].advertencias[userId];
+      await salvarAtividade(atividade);
+    } catch (err) {
+      console.error('❌ Erro ao remover usuário:', err.message);
+      await chat.sendMessage(
+        `⚠️ @${contato.id.user} deveria ser banido (3 advertências), mas o bot não tem permissão de admin.`,
+        { mentions: [contato] }
+      );
+    }
+  } else {
+    await chat.sendMessage(
+      `⚠️ @${contato.id.user}, conteúdo proibido neste grupo. Advertência (${advCount}/3). Mensagem apagada.`,
+      { mentions: [contato] }
+    );
+  }
+
+  return true;
 }
 
 // Inicializa o cliente WhatsApp com autenticação local (persiste sessão)
@@ -86,6 +262,15 @@ client.on('ready', async () => {
   // Carrega dados salvos
   atividade = await carregarAtividade();
   console.log(`📂 Dados carregados: ${Object.keys(atividade).length} grupo(s) monitorado(s).`);
+  const qtdGemini = gemini.getGeminiKeys().length;
+  if (qtdGemini > 0) {
+    console.log(
+      `🤖 Gemini: ${qtdGemini} chave(s), modelos ${gemini.getGeminiModels().join(' → ')} — IA ativa na moderação`
+    );
+  } else {
+    console.warn('⚠️ GEMINI_API_KEY não definida — moderação só por palavras (sem IA texto/mídia).');
+  }
+  console.log('🛡️ Moderação automática: Espada_ruadaestacao + grupo Fd (teste)');
   console.log('');
   console.log('🔍 Aguardando mensagens... (se ninguém falar, nada aparece aqui)');
   console.log('');
@@ -141,81 +326,8 @@ async function processarMensagem(msg, eventoOrigem) {
 
     console.log(`💬 Mensagem no grupo "${nomeGrupo}" de ${userId} (pv: ${idPrivadoRemetente}): "${corpo.substring(0, 50)}"`);
 
-    // ─── MODERADOR AUTOMÁTICO ANTI-SPAM / ANÚNCIOS ───
-    // Moderação ativa APENAS para o grupo "Espada_ruadaestacao". Outros grupos têm livre trânsito e não são moderados.
-    const nomeGrupoLimpo = nomeGrupo.toLowerCase().replace(/[\s_]+/g, '_');
-    const isGrupoEstacao = nomeGrupoLimpo.includes('espada_ruadaestacao') || nomeGrupoLimpo.includes('espada_rua_da_estacao');
-
-    if (isGrupoEstacao && !msg.fromMe && !corpo.startsWith('/')) {
-      let eAdmin = false;
-      try {
-        const participante = chat.participants.find(p => p.id._serialized === userId);
-        if (participante && (participante.isAdmin || participante.isSuperAdmin)) {
-          eAdmin = true;
-        }
-      } catch (err) {
-        console.error('⚠️ Erro ao verificar privilégios no Moderador:', err.message);
-      }
-
-      if (!eAdmin) {
-        const avaliacao = avaliarTexto(corpo, { grupoEspada: true });
-
-        if (!avaliacao.permitido) {
-            console.log(`🚨 SPAM DETECTADO de ${userId} no grupo "${nomeGrupo}": ${avaliacao.motivo || corpo.substring(0, 100)}`);
-
-            // 1. Apaga a mensagem na hora!
-            try {
-              await msg.delete(true);
-              console.log(`🗑️ Mensagem de spam apagada com sucesso.`);
-            } catch (err) {
-              console.error('❌ Erro ao apagar mensagem de spam:', err.message);
-            }
-
-            const groupId = chat.id._serialized;
-
-            // 2. Registra advertência de forma persistente
-            if (!atividade[groupId]) {
-              atividade[groupId] = {
-                nomeGrupo: nomeGrupo,
-                membros: {}
-              };
-            }
-
-            if (!atividade[groupId].advertencias) {
-              atividade[groupId].advertencias = {};
-            }
-
-            if (!atividade[groupId].advertencias[userId]) {
-              atividade[groupId].advertencias[userId] = 0;
-            }
-
-            atividade[groupId].advertencias[userId] += 1;
-            const advCount = atividade[groupId].advertencias[userId];
-            await salvarAtividade(atividade);
-
-            const contato = await msg.getContact();
-
-            // 3. Executa a punição correspondente
-            if (advCount >= 3) {
-              try {
-                await chat.removeParticipants([userId]);
-                console.log(`🚫 Usuário ${userId} removido por excesso de spam.`);
-                await chat.sendMessage(`🚫 @${contato.id.user} foi removido do grupo por atingir o limite de 3 advertências de anúncios proibidos.`, { mentions: [contato] });
-
-                // Reseta contagem do usuário banido
-                delete atividade[groupId].advertencias[userId];
-                await salvarAtividade(atividade);
-              } catch (err) {
-                console.error('❌ Erro ao remover usuário do grupo:', err.message);
-                await chat.sendMessage(`⚠️ @${contato.id.user} deveria ser banido por atingir 3 advertências, mas o bot não possui privilégios de Admin para removê-lo!`, { mentions: [contato] });
-              }
-            } else {
-              await chat.sendMessage(`⚠️ @${contato.id.user}, anúncios não são permitidos! Advertência (${advCount}/3). A sua mensagem foi apagada.`, { mentions: [contato] });
-            }
-
-            return; // Para o fluxo de processamento para não computar essa mensagem como ativa
-        }
-      }
+    if (await moderarConteudoGrupo(msg, chat, nomeGrupo, userId, corpo)) {
+      return;
     }
 
     // ─── Comando /baninativo (Apenas Bot Master) ───
